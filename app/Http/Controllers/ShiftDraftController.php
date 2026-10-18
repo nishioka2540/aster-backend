@@ -32,10 +32,13 @@ final class ShiftDraftController extends Controller
         abort_unless($request->user()->auth_type === 0, 403);
         $shifts = DB::table('t_shifts')->where('user_id', $request->user()->getAuthIdentifier())
             ->whereNull('deleted_at')->get();
+        $requests = DB::table('t_shift_requests')->whereIn('id', $shifts->pluck('shift_request_id'))->whereNull('deleted_at')->get()->keyBy('id');
+        $shifts = $shifts->filter(fn ($shift) => $requests->has($shift->shift_request_id));
         $details = DB::table('t_shift_details')->whereIn('shift_id', $shifts->pluck('id'))
             ->whereNull('deleted_at')->orderBy('work_date')->get()->groupBy('shift_id');
         return response()->json(['data' => $shifts->map(fn ($shift) => [
-            'shift_request_id' => (int) $shift->shift_request_id, 'status' => (int) $shift->status,
+            'shift_request_id' => (int) $shift->shift_request_id, 'status' => (int) $shift->status, 'submitted_at' => $shift->submitted_at,
+            'request' => $requests->get($shift->shift_request_id),
             'days' => ($details->get($shift->id) ?? collect())->map(fn ($day) => [
                 'work_date' => $day->work_date, 'work' => (bool) $day->availability,
                 'start_time' => $day->start_time ? substr($day->start_time, 0, 5) : null,

@@ -23,7 +23,7 @@ final readonly class SubmitShiftUseCase
             $timezone = new DateTimeZone('Asia/Tokyo');
             $shift = new Shift($requestId, $userId, $days, \Carbon\CarbonImmutable::now('Asia/Tokyo')->toDateTimeImmutable(),
                 $request['period_start'], $request['period_end'],
-                new DateTimeImmutable($request['submission_deadline'], $timezone), $request['accepting'], $status);
+                new DateTimeImmutable($request['submission_deadline'], $timezone), $request['accepting'], $status, $request['finalized_dates'] ?? []);
 
             return $this->repository->save($shift);
         });

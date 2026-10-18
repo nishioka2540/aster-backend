@@ -60,7 +60,7 @@ class ShiftScheduleTest extends TestCase
         $this->assertNotNull(DB::table('t_shift_schedule_days')->value('confirmed_at'));
         $this->getJson('/api/shift-requests/accepting')->assertJsonCount(0, 'data');
         $this->getJson('/api/shift-requests/defaults')->assertJsonPath('period_start', '2026-10-20');
-        $this->putJson("$url/days/2026-10-16", ['casts' => $casts])->assertUnprocessable();
+        $this->putJson("$url/days/2026-10-16", ['casts' => $casts])->assertOk();
         $this->postJson("$url/confirm")->assertUnprocessable();
     }
 
@@ -188,7 +188,7 @@ class ShiftScheduleTest extends TestCase
         $this->assertNotNull(DB::table('t_shift_schedule_days')->where('shift_request_id', $id)->value('confirmed_at'));
         $this->assertDatabaseHas('t_shift_requests', ['id' => $id, 'status' => 0]);
         $this->getJson($url)->assertJsonPath('days.0.finalized', true)->assertJsonPath('days.1.finalized', false);
-        $this->putJson("$url/days/2026-10-16", ['casts' => $this->casts($cast)])->assertUnprocessable();
+        $this->putJson("$url/days/2026-10-16", ['casts' => $this->casts($cast)])->assertOk();
         $this->postJson('/api/shift-requests', $payload)->assertUnprocessable();
         $this->actingAs($cast)->getJson('/api/shifts/confirmed')->assertJsonCount(1, 'data.0.shifts');
         $this->actingAs($admin);
@@ -199,6 +199,37 @@ class ShiftScheduleTest extends TestCase
         $this->assertDatabaseHas('t_shift_requests', ['id' => $id, 'status' => 1]);
         $this->postJson('/api/shift-requests', $payload)->assertCreated();
         $this->assertDatabaseCount('t_shift_requests', 2);
+    }
+
+    public function test_editing_finalized_day_preserves_publication_and_rejects_invalid_changes(): void
+    {
+        [$admin, $cast, $id, $url] = $this->fixture();
+        $this->actingAs($admin);
+        foreach (['2026-10-16', '2026-10-19'] as $date) {
+            $this->putJson("$url/days/$date", ['casts' => $this->casts($cast)])->assertOk();
+        }
+        $this->postJson("$url/confirm")->assertOk();
+        $day = DB::table('t_shift_schedule_days')->where('shift_request_id', $id)->where('work_date', '2026-10-16')->first();
+        $this->getJson('/api/shift-requests/accepting')->assertJsonCount(0, 'data');
+        $this->getJson('/api/shift-requests/accepting?include_confirmed=1')->assertJsonPath('data.0.id', $id);
+        $casts = $this->casts($cast);
+        $casts[0]['start'] = '21:00';
+        $this->putJson("$url/days/2026-10-16", ['casts' => $casts])->assertOk();
+        $this->getJson("$url/days/2026-10-16")->assertJsonPath('confirmed', true)->assertJsonPath('casts.0.start', '21:00');
+        $this->assertDatabaseHas('t_shift_schedule_days', ['id' => $day->id, 'status' => 2, 'confirmed_at' => $day->confirmed_at]);
+        $this->assertDatabaseHas('t_shift_requests', ['id' => $id, 'status' => 1]);
+        $invalid = $casts; $invalid[0]['start'] = '23:00';
+        $this->putJson("$url/days/2026-10-16", ['casts' => $invalid])->assertUnprocessable();
+        $this->actingAs($cast)->getJson('/api/shifts/confirmed')->assertJsonPath('data.0.shifts.0.start', '21:00');
+        $this->putJson("$url/days/2026-10-16", ['casts' => $casts])->assertForbidden();
+        $this->actingAs($admin);
+        $casts[0]['work'] = false;
+        $this->putJson("$url/days/2026-10-16", ['casts' => $casts])->assertOk();
+        $this->actingAs($cast)->getJson('/api/shifts/confirmed')->assertJsonCount(1, 'data.0.shifts')->assertJsonPath('data.0.shifts.0.date', '2026-10-19');
+        $this->actingAs($admin);
+        $casts[0]['work'] = true;
+        $this->putJson("$url/days/2026-10-16", ['casts' => $casts])->assertOk();
+        $this->actingAs($cast)->getJson('/api/shifts/confirmed')->assertJsonCount(2, 'data.0.shifts');
     }
 
 }

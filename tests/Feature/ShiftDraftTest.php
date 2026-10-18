@@ -44,9 +44,9 @@ class ShiftDraftTest extends TestCase
         $this->assertDatabaseCount('t_shifts', 1);
         $other = User::factory()->create()->refresh();
         $this->actingAs($other)->getJson('/api/shifts/mine')->assertOk()->assertJsonPath('data', []);
-        $this->actingAs($cast)->postJson('/api/shifts/draft', ['shift_request_id' => $id, 'days' => []])->assertOk();
-        $this->getJson('/api/shifts/mine')->assertJsonPath('data.0.status', ShiftStatus::Draft->value)
-            ->assertJsonPath('data.0.days', []);
+        $this->actingAs($cast)->postJson('/api/shifts/draft', ['shift_request_id' => $id, 'days' => []])->assertUnprocessable();
+        $this->getJson('/api/shifts/mine')->assertJsonPath('data.0.status', ShiftStatus::Submitted->value)
+            ->assertJsonCount(2, 'data.0.days');
         $payload['days'][0]['work_date'] = '2026-10-17';
         $this->postJson('/api/shifts/draft', $payload)->assertUnprocessable();
         DB::table('t_shift_requests')->where('id', $id)->update(['submission_deadline' => '2000-01-01 00:00:00']);

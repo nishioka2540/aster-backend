@@ -108,7 +108,7 @@ class LineLoginController extends Controller
         // ログイン前のセッションIDを更新し、セッション固定攻撃を防ぐ。
         $request->session()->regenerate();
 
-        return redirect()->away(rtrim(config('services.line.frontend_url'), '/').'/submission');
+        return redirect()->away(rtrim(config('services.line.frontend_url'), '/').($user->auth_type === 1 ? '/request_shift' : app(\App\Application\Shift\CastHomePath::class)->forUser((int) $user->getAuthIdentifier())));
     }
 
     /**

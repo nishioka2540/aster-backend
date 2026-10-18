@@ -39,7 +39,6 @@ final readonly class ShiftScheduleUseCase
     {
         $this->repository->transaction(function () use ($id, $date, $casts, $adminId) {
             $schedule = $this->find($id, true);
-            if ($this->repository->days($id)[$date]['finalized'] ?? false) throw new DomainException('確定済みの日は編集できません。');
             $schedule->decide($date, $casts, $this->repository->castIds($id, $date));
             $this->repository->saveDay($id, $date, $casts, $adminId);
         });

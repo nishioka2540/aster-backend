@@ -23,6 +23,7 @@ final class AdminCastShiftController extends Controller
         $cast = User::where('auth_type', 0)->where('ulid', $castId)->firstOrFail();
         $period = DB::table('t_shift_requests')->where('id', $requestId)->whereNull('deleted_at')->first();
         abort_unless($period, 404);
+        $period->finalized_dates = DB::table('t_shift_schedule_days')->where('shift_request_id', $requestId)->where('status', 2)->whereNull('deleted_at')->pluck('work_date')->all();
         $shift = DB::table('t_shifts')->where('shift_request_id', $requestId)
             ->where('user_id', $cast->id)->where('status', ShiftStatus::Submitted->value)->whereNull('deleted_at')->first();
         $days = $shift ? DB::table('t_shift_details')->where('shift_id', $shift->id)

@@ -25,7 +25,6 @@ final readonly class ShiftSchedule
     public function decide(string $date, array $casts, array $castIds): void
     {
         $this->validateDate($date);
-        if ($this->confirmed) throw new DomainException('確定済みの期間は編集できません。');
         $ids = array_map(fn ($cast) => (int) $cast['id'], $casts);
         sort($ids);
         sort($castIds);

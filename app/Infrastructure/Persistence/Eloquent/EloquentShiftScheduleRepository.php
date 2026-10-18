@@ -94,7 +94,7 @@ final class EloquentShiftScheduleRepository implements ShiftScheduleRepository
         $now = CarbonImmutable::now('Asia/Tokyo');
         $key = ['shift_request_id' => $requestId, 'work_date' => $date];
         $existing = DB::table('t_shift_schedule_days')->where($key)->first();
-        $attributes = ['status' => 1, 'decided_by' => $adminId, 'decided_at' => $now, 'deleted_at' => null, 'updated_at' => $now];
+        $attributes = ['status' => $existing && (int) $existing->status === 2 ? 2 : 1, 'decided_by' => $adminId, 'decided_at' => $now, 'deleted_at' => null, 'updated_at' => $now];
         if ($existing) {
             $dayId = (int) $existing->id;
             DB::table('t_shift_schedule_days')->where('id', $dayId)->update($attributes);

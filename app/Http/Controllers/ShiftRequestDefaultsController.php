@@ -14,8 +14,8 @@ final class ShiftRequestDefaultsController extends Controller
     {
         abort_unless($request->user()->auth_type === 1, 403);
         $end = $availability->latestConfirmedEnd();
-        $start = $end ? CarbonImmutable::parse($end, 'Asia/Tokyo')->addWeekday() : CarbonImmutable::today('Asia/Tokyo');
-        while ($start->isWeekend()) $start = $start->addDay();
-        return response()->json(['period_start' => $start->toDateString(), 'confirmed_end' => $end, 'has_unconfirmed_request' => \Illuminate\Support\Facades\DB::table('t_shift_requests')->whereNull('deleted_at')->where('status', 0)->exists()]);
+        $start = $end ? CarbonImmutable::parse($end, 'Asia/Tokyo')->addWeekday()->toDateString() : null;
+        $deadline = $end ? null : CarbonImmutable::today('Asia/Tokyo')->addWeekday()->toDateString();
+        return response()->json(['period_start' => $start, 'submission_deadline' => $deadline, 'confirmed_end' => $end, 'has_unconfirmed_request' => \Illuminate\Support\Facades\DB::table('t_shift_requests')->whereNull('deleted_at')->where('status', 0)->exists()]);
     }
 }

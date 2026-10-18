@@ -27,6 +27,7 @@ final class EloquentShiftRepository implements ShiftRepository
             'period_start' => $request->period_start,
             'period_end' => $request->period_end,
             'submission_deadline' => $request->submission_deadline,
+            'finalized_dates' => DB::table('t_shift_schedule_days')->where('shift_request_id', $requestId)->where('status', 2)->whereNull('deleted_at')->pluck('work_date')->all(),
             'accepting' => $this->availability->isAccepting($requestId),
         ] : null;
     }
@@ -38,13 +39,17 @@ final class EloquentShiftRepository implements ShiftRepository
         $now = $shift->submittedAt->format('Y-m-d H:i:s');
         $existing = DB::table('t_shifts')->where('shift_request_id', $requestId)->where('user_id', $userId)->first();
         $attributes = ['status' => $shift->status->value, 'submitted_at' => $shift->status === ShiftStatus::Submitted ? $now : null, 'updated_at' => $now, 'deleted_at' => null];
+        if ($existing && (int) $existing->status === ShiftStatus::Submitted->value && $shift->status === ShiftStatus::Draft) {
+            throw new \DomainException('提出済みのシフトは下書きに戻せません。変更内容を再提出してください。');
+        }
         if ($existing) {
             $id = (int) $existing->id;
             DB::table('t_shifts')->where('id', $id)->update($attributes);
         } else {
             $id = DB::table('t_shifts')->insertGetId([...$attributes, 'shift_request_id' => $requestId, 'user_id' => $userId, 'created_at' => $now]);
         }
-        DB::table('t_shift_details')->where('shift_id', $id)
+        $finalized = DB::table('t_shift_schedule_days')->where('shift_request_id', $requestId)->where('status', 2)->whereNull('deleted_at')->pluck('work_date')->all();
+        DB::table('t_shift_details')->where('shift_id', $id)->whereNotIn('work_date', $finalized)
             ->whereNotIn('work_date', array_column($shift->days, 'work_date'))->update(['deleted_at' => $now, 'updated_at' => $now]);
         foreach ($shift->days as $day) {
             $work = (bool) $day['work'];

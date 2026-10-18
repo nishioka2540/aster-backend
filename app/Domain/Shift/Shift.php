@@ -19,16 +19,21 @@ final readonly class Shift
         DateTimeImmutable $deadline,
         bool $accepting,
         public ShiftStatus $status = ShiftStatus::Submitted,
+        array $finalizedDates = [],
     ) {
         if (! $accepting || $submittedAt->format('Y-m-d') > $deadline->format('Y-m-d')) {
             throw new DomainException('この依頼は受付を終了しています。');
         }
         $expected = [];
         for ($date = new DateTimeImmutable($periodStart); $date->format('Y-m-d') <= $periodEnd; $date = $date->modify('+1 day')) {
-            if ((int) $date->format('N') < 6) {
+            if ((int) $date->format('N') < 6 && !in_array($date->format('Y-m-d'), $finalizedDates, true)) {
                 $expected[] = $date->format('Y-m-d');
             }
         }
+        if (array_intersect(array_column($days, 'work_date'), $finalizedDates)) {
+            throw new DomainException('確定済みの日は変更できません。画面を読み込み直してください。');
+        }
+        if (!$expected) throw new DomainException('変更できる日がありません。');
         $actual = array_column($days, 'work_date');
         sort($actual);
         if (($status === ShiftStatus::Submitted && $actual !== $expected)

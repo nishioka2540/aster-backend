@@ -40,7 +40,7 @@ class LineLoginTest extends TestCase
         for ($i = 0; $i < 2; $i++) {
             $this->withSession(['line_login' => $this->attempt()])
                 ->get('/auth/line/callback?state=state&code=code')
-                ->assertRedirect('http://localhost:5173/submission');
+                ->assertRedirect('http://localhost:5173/my_shifts');
             $this->assertAuthenticatedAs(User::where('line_id', 'U123')->firstOrFail());
         }
         $this->assertDatabaseCount('mst_users', 1);
