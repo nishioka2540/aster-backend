@@ -41,4 +41,11 @@ class UserFactory extends Factory
             'email_verified_at' => null,
         ]);
     }
+
+    public function cast(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'auth_type' => 0,
+        ]);
+    }
 }

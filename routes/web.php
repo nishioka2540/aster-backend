@@ -47,3 +47,6 @@ Route::get('/api/shifts/confirmed', [\App\Http\Controllers\ShiftScheduleControll
 
 Route::put('/api/shift-requests/{requestId}', [ShiftRequestController::class, 'update'])
     ->whereNumber('requestId')->middleware(['auth', 'throttle:30,1']);
+
+Route::post('/api/admin/shift-requests/{requestId}/remind', \App\Http\Controllers\LineReminderController::class)
+    ->whereNumber('requestId')->middleware(['auth', 'throttle:6,1']);
