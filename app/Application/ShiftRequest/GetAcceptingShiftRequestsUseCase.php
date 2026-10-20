@@ -5,5 +5,5 @@ final readonly class GetAcceptingShiftRequestsUseCase
 {
     public function __construct(private ShiftRequestRepository $repository) {}
     /** @return list<\App\Domain\ShiftRequest\RequestedShiftPeriod> */
-    public function execute(): array { return $this->repository->findAcceptingRequests(); }
+    public function execute(?int $userId = null): array { return $this->repository->findAcceptingRequests($userId); }
 }

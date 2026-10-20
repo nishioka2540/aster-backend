@@ -8,7 +8,7 @@ class SubmitShiftRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->auth_type === 0;
+        return $this->user()?->canRegisterShifts();
     }
 
     public function rules(): array

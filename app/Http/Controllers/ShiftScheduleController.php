@@ -17,14 +17,14 @@ final class ShiftScheduleController extends Controller
 {
     public function mine(Request $request, ShiftScheduleUseCase $useCase)
     {
-        abort_unless($request->user()->auth_type === 0, 403);
+        abort_unless($request->user()->canRegisterShifts(), 403);
 
         return response()->json(['data' => $useCase->publishedForCast((int) $request->user()->id)]);
     }
 
     private function execute(Request $request, callable $operation)
     {
-        abort_unless($request->user()->auth_type === 1, 403);
+        abort_unless($request->user()->canManageShifts(), 403);
         try {
             return response()->json($operation());
         } catch (DomainException $exception) {
@@ -44,7 +44,7 @@ final class ShiftScheduleController extends Controller
 
         return $this->execute($request, function () use ($useCase, $requestId, $date) {
             $result = $useCase->assignments($requestId, $date);
-            $ulids = User::where('auth_type', 0)->pluck('ulid', 'id');
+            $ulids = User::where('user_type', User::TYPE_CAST)->pluck('ulid', 'id');
             $result['casts'] = array_map(fn ($cast) => [...$cast, 'id' => $ulids[$cast['id']]], $result['casts']);
 
             return $result;
@@ -58,7 +58,7 @@ final class ShiftScheduleController extends Controller
 
         return $this->execute($request, function () use ($request, $requestId, $date, $useCase) {
             $casts = array_map(function ($cast) {
-                $user = User::where('auth_type', 0)->where('ulid', $cast['id'])->first();
+                $user = User::where('user_type', User::TYPE_CAST)->where('ulid', $cast['id'])->first();
                 if (! $user) {
                     throw ValidationException::withMessages(['casts' => 'キャストが見つかりません。']);
                 }

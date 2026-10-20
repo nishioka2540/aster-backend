@@ -12,10 +12,10 @@ class ShiftScheduleTest extends TestCase
 
     private function fixture(): array
     {
-        $admin = User::factory()->create(['auth_type' => 1])->refresh();
+        $admin = User::factory()->create(['auth_type' => 1, 'user_type' => 1, 'role_type' => 1])->refresh();
         $cast = User::factory()->create()->refresh();
         $id = DB::table('t_shift_requests')->insertGetId(['requested_by' => $admin->id,
-            'period_start' => '2026-10-16', 'period_end' => '2026-10-19', 'submission_deadline' => '2099-10-09 23:59:59']);
+            'period_start' => '2026-10-16', 'period_end' => '2026-10-19', 'submission_deadline' => '2026-10-09 23:59:59']);
         $this->submitAvailable($cast, $id);
         return [$admin, $cast, $id, "/api/admin/shift-requests/$id/schedule"];
     }
@@ -34,6 +34,32 @@ class ShiftScheduleTest extends TestCase
     private function casts(User $cast): array
     {
         return [['id' => $cast->ulid, 'work' => true, 'start' => '20:00', 'end' => '24:00', 'reserved' => true, 'note' => '予約']];
+    }
+
+    public function test_confirmation_is_blocked_through_deadline_day_and_allowed_from_next_day(): void
+    {
+        [$admin, $cast, $id, $url] = $this->fixture();
+        DB::table('t_shift_requests')->where('id', $id)->update(['submission_deadline' => '2026-10-09 00:00:00']);
+        $this->actingAs($admin);
+        $this->travelTo(\Carbon\CarbonImmutable::parse('2026-10-08 12:00:00', 'Asia/Tokyo'));
+        foreach (['2026-10-16', '2026-10-19'] as $date) {
+            $this->putJson("$url/days/$date", ['casts' => $this->casts($cast)])->assertOk();
+        }
+        foreach (['2026-10-08 12:00:00', '2026-10-09 23:59:59'] as $now) {
+            $this->travelTo(\Carbon\CarbonImmutable::parse($now, 'Asia/Tokyo'));
+            $this->getJson($url)->assertOk()->assertJsonPath('confirmation_available', false);
+            foreach ([[], ['from' => '2026-10-16', 'to' => '2026-10-16']] as $range) {
+                $this->postJson("$url/confirm", $range)->assertUnprocessable()
+                    ->assertJsonFragment(['提出期限内はシフトを確定できません。提出期限の翌日から確定できます。']);
+            }
+            $this->assertDatabaseMissing('t_shift_schedule_days', ['shift_request_id' => $id, 'status' => 2]);
+            $this->assertDatabaseHas('t_shift_requests', ['id' => $id, 'status' => 0]);
+        }
+        $this->travelTo(\Carbon\CarbonImmutable::parse('2026-10-10 00:00:00', 'Asia/Tokyo'));
+        $this->getJson($url)->assertJsonPath('confirmation_available', true);
+        $this->postJson("$url/confirm")->assertOk();
+        $this->assertDatabaseHas('t_shift_requests', ['id' => $id, 'status' => 1]);
+        $this->travelBack();
     }
 
     public function test_decisions_persist_and_period_confirmation_closes_submissions(): void
@@ -163,7 +189,7 @@ class ShiftScheduleTest extends TestCase
         foreach (['2026-10-16', '2026-10-19'] as $date) $this->putJson("$url/days/$date", ['casts' => $casts])->assertOk();
         $this->actingAs($cast)->getJson('/api/shifts/confirmed')->assertOk()->assertJsonCount(0, 'data');
         $this->actingAs($admin)->postJson("$url/confirm")->assertOk();
-        $this->getJson('/api/shifts/confirmed')->assertForbidden();
+        $this->getJson('/api/shifts/confirmed')->assertOk();
         $this->actingAs($cast)->getJson('/api/shifts/confirmed')->assertOk()->assertJsonCount(1, 'data')
             ->assertJsonCount(2, 'data.0.shifts')->assertJsonPath('data.0.shifts.0.start', '20:00')
             ->assertJsonPath('data.0.shifts.0.end', '24:00');

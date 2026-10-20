@@ -13,22 +13,26 @@ class users_table_seeder extends Seeder
      */
     public function run(): void
     {
-        User::updateOrCreate(
+        User::unguarded(fn () => User::updateOrCreate(
             ['email' => 'nishioka@example.com'],
             [
                 'name' => 'nishioka',
                 'password' => Hash::make('pass'),
                 'auth_type' => 1,
+                'user_type' => 1,
+                'role_type' => 1,
             ],
-        );
+        ));
 
-        User::updateOrCreate(
+        User::unguarded(fn () => User::updateOrCreate(
             ['email' => 'ayana@example.com'],
             [
                 'name' => 'Ayana',
                 'password' => Hash::make('pass'),
                 'auth_type' => 0,
+                'user_type' => 2,
+                'role_type' => 3,
             ],
-        );
+        ));
     }
 }

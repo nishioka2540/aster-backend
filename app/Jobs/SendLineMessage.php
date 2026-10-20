@@ -34,7 +34,7 @@ final class SendLineMessage implements ShouldQueue
 
             return;
         }
-        $user = User::where('auth_type', 0)->find($this->userId);
+        $user = User::where('user_type', User::TYPE_CAST)->find($this->userId);
         if (! $user?->line_id) {
             return;
         }

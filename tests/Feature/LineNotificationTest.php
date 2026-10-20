@@ -32,7 +32,7 @@ class LineNotificationTest extends TestCase
         $this->travelTo(now()->setDate(2026, 10, 19));
         Cache::flush();
         $this->admin = User::factory()->create();
-        $this->admin->forceFill(['auth_type' => 1])->save();
+        $this->admin->forceFill(['auth_type' => 1, 'user_type' => 1, 'role_type' => 1])->save();
         Queue::fake();
         Http::preventStrayRequests();
     }
@@ -59,12 +59,36 @@ class LineNotificationTest extends TestCase
         $id = $this->createRequest();
         DB::table('t_shifts')->insert(['user_id' => $submitted->id, 'shift_request_id' => $id, 'status' => 2, 'created_at' => now(), 'updated_at' => now()]);
         Queue::fake();
+        $this->travelTo(\Carbon\CarbonImmutable::parse('2026-10-24 00:00:00', 'Asia/Tokyo'));
         $url = '/api/admin/shift-requests/'.$id.'/remind';
         $this->postJson($url)->assertOk();
         Queue::assertPushed(SendLineMessage::class, fn ($job) => $job->userId === $unsubmitted->id);
         Queue::assertPushed(SendLineMessage::class, 1);
         $this->postJson($url)->assertStatus(429);
         $this->actingAs($unsubmitted)->postJson($url)->assertForbidden();
+    }
+
+    public function test_reminder_is_available_only_from_day_after_deadline_in_japan(): void
+    {
+        User::factory()->create(['line_id' => 'Ucast']);
+        $id = $this->createRequest();
+        Queue::fake();
+        $url = '/api/admin/shift-requests/'.$id.'/remind';
+        foreach (['2026-10-22 12:00:00', '2026-10-23 23:59:59'] as $time) {
+            $this->travelTo(\Carbon\CarbonImmutable::parse($time, 'Asia/Tokyo'));
+            $this->getJson('/api/shifts/status')->assertOk()->assertJsonPath('data.0.reminder_available', false);
+            $this->postJson($url)->assertUnprocessable();
+            Queue::assertNothingPushed();
+        }
+        $this->travelTo(\Carbon\CarbonImmutable::parse('2026-10-24 00:00:00', 'Asia/Tokyo'));
+        $this->getJson('/api/shifts/status')->assertOk()->assertJsonPath('data.0.reminder_available', true);
+        $this->postJson($url)->assertOk();
+        Queue::assertPushed(SendLineMessage::class, fn ($job) => $job->text === "シフトの提出がまだ確認できていません。\n\n対象期間：10月26日〜10月30日\n\n提出期限を過ぎていますので、お早めに提出をお願いします。\n\n▼シフトの提出はこちら\n".rtrim(config('services.line.frontend_url'), '/'));
+        Cache::flush();
+        Queue::fake();
+        DB::table('t_shift_requests')->where('id', $id)->update(['status' => 1]);
+        $this->postJson($url)->assertUnprocessable();
+        Queue::assertNothingPushed();
     }
 
     public function test_job_sends_with_stable_retry_key_and_retries_server_errors(): void
@@ -89,6 +113,7 @@ class LineNotificationTest extends TestCase
         $id = $this->createRequest();
         Queue::fake();
         $url = '/api/admin/shift-requests/'.$id.'/schedule';
+        $this->travelTo(\Carbon\CarbonImmutable::parse('2026-10-24 00:00:00', 'Asia/Tokyo'));
         // No submitted availability: days can be decided with no workers.
         foreach (['2026-10-26', '2026-10-27'] as $date) {
             $this->putJson($url.'/days/'.$date, ['casts' => []])->assertOk();

@@ -16,7 +16,7 @@ final class EloquentShiftScheduleRepository implements ShiftScheduleRepository
         if ($lock) $query->lockForUpdate();
         $request = $query->first();
         if (!$request) return null;
-        return new ShiftSchedule($requestId, $request->period_start, $request->period_end, (int) $request->status === 1);
+        return new ShiftSchedule($requestId, $request->period_start, $request->period_end, (int) $request->status === 1, $request->submission_deadline);
     }
 
     public function publishedForCast(int $castId): array
@@ -40,7 +40,7 @@ final class EloquentShiftScheduleRepository implements ShiftScheduleRepository
     public function castIds(int $requestId, string $date): array
     {
         return DB::table('mst_users as cast')
-            ->where('cast.auth_type', 0)->whereNull('cast.deleted_at')
+            ->where('cast.user_type', 2)->whereNull('cast.deleted_at')
             ->whereExists(function ($query) use ($requestId, $date) {
                 $query->selectRaw('1')->from('t_shift_details as detail')
                     ->join('t_shifts as shift', 'shift.id', '=', 'detail.shift_id')
@@ -60,10 +60,10 @@ final class EloquentShiftScheduleRepository implements ShiftScheduleRepository
         foreach ($rows as $day) {
             $count = DB::table('t_shift_assignments as assignment')->join('mst_users as cast', 'cast.id', '=', 'assignment.user_id')
                 ->where('assignment.shift_schedule_day_id', $day->id)->where('assignment.work', true)
-                ->whereNull('assignment.deleted_at')->whereNull('cast.deleted_at')->where('cast.auth_type', 0)->count();
+                ->whereNull('assignment.deleted_at')->whereNull('cast.deleted_at')->where('cast.user_type', 2)->count();
             $savedIds = DB::table('t_shift_assignments as assignment')->join('mst_users as cast', 'cast.id', '=', 'assignment.user_id')
                 ->where('assignment.shift_schedule_day_id', $day->id)->whereNull('assignment.deleted_at')
-                ->whereNull('cast.deleted_at')->where('cast.auth_type', 0)->orderBy('cast.id')
+                ->whereNull('cast.deleted_at')->where('cast.user_type', 2)->orderBy('cast.id')
                 ->pluck('cast.id')->map(fn ($id) => (int) $id)->all();
             $result[$day->work_date] = ['finalized' => (int) $day->status === 2, 'confirmed' => (int) $day->status >= 1 && $savedIds === $this->castIds($requestId, $day->work_date), 'count' => $count];
         }

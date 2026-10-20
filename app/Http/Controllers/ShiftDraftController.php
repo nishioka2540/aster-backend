@@ -29,7 +29,7 @@ final class ShiftDraftController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        abort_unless($request->user()->auth_type === 0, 403);
+        abort_unless($request->user()->canRegisterShifts(), 403);
         $shifts = DB::table('t_shifts')->where('user_id', $request->user()->getAuthIdentifier())
             ->whereNull('deleted_at')->get();
         $requests = DB::table('t_shift_requests')->whereIn('id', $shifts->pluck('shift_request_id'))->whereNull('deleted_at')->get()->keyBy('id');

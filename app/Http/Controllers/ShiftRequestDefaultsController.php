@@ -12,7 +12,7 @@ final class ShiftRequestDefaultsController extends Controller
 {
     public function __invoke(Request $request, ShiftRequestAvailabilityQueryService $availability)
     {
-        abort_unless($request->user()->auth_type === 1, 403);
+        abort_unless($request->user()->canManageShifts(), 403);
         $end = $availability->latestConfirmedEnd();
         $start = $end ? CarbonImmutable::parse($end, 'Asia/Tokyo')->addWeekday()->toDateString() : null;
         $deadline = $end ? null : CarbonImmutable::today('Asia/Tokyo')->addWeekday()->toDateString();

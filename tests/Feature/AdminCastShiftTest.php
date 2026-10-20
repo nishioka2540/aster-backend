@@ -13,7 +13,7 @@ class AdminCastShiftTest extends TestCase
 
     public function test_admin_can_submit_for_a_cast_without_a_draft(): void
     {
-        $admin = User::factory()->create(['auth_type' => 1])->refresh();
+        $admin = User::factory()->create(['auth_type' => 1, 'user_type' => 1, 'role_type' => 1])->refresh();
         $cast = User::factory()->create()->refresh();
         $id = DB::table('t_shift_requests')->insertGetId([
             'requested_by' => $admin->id, 'period_start' => '2026-11-02', 'period_end' => '2026-11-02',
@@ -33,6 +33,8 @@ class AdminCastShiftTest extends TestCase
     public function test_admin_can_read_register_and_edit_a_cast_submission(): void
     {
         $admin = User::factory()->create()->refresh();
+        $admin->user_type = 1;
+        $admin->role_type = 1;
         $admin->auth_type = 1;
         $admin->save();
         $cast = User::factory()->create()->refresh();

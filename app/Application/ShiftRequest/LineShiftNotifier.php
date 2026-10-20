@@ -17,7 +17,7 @@ final class LineShiftNotifier
         }
         $request = DB::table('t_shift_requests')->where('id', $requestId)->whereNull('deleted_at')->first();
         abort_unless($request, 404);
-        $casts = User::where('auth_type', 0);
+        $casts = User::where('user_type', User::TYPE_CAST);
         if ($kind === 'reminder') {
             $casts->whereNotExists(fn ($q) => $q->selectRaw('1')->from('t_shifts')
                 ->whereColumn('t_shifts.user_id', 'mst_users.id')->where('shift_request_id', $requestId)
@@ -34,6 +34,11 @@ final class LineShiftNotifier
             if ($request->notice) {
                 $text .= "\n".Str::limit($request->notice, 2000);
             }
+        }
+        if ($kind === 'reminder') {
+            $fromLabel = \Carbon\CarbonImmutable::parse($request->period_start)->format('n月j日');
+            $toLabel = \Carbon\CarbonImmutable::parse($request->period_end)->format('n月j日');
+            $text = "シフトの提出がまだ確認できていません。\n\n対象期間：{$fromLabel}〜{$toLabel}\n\n提出期限を過ぎていますので、お早めに提出をお願いします。\n\n▼シフトの提出はこちら";
         }
         $text .= "\n".rtrim(config('services.line.frontend_url'), '/');
         $queued = 0;

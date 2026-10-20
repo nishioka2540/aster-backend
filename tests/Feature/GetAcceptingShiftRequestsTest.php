@@ -22,7 +22,7 @@ class GetAcceptingShiftRequestsTest extends TestCase
         $deleted = ShiftRequestModel::create($payload);
         $deleted->delete();
         $this->actingAs($user)->getJson('/api/shift-requests/accepting')->assertOk()
-            ->assertJsonCount(2, 'data')->assertJsonPath('data.0.id', $first->id)
+            ->assertJsonCount(3, 'data')->assertJsonPath('data.0.id', $first->id)
             ->assertJsonPath('data.1.id', $second->id)
             ->assertJsonPath('data.0.period_start', '2026-10-12')
             ->assertJsonPath('data.0.period_end', '2026-10-16');

@@ -66,11 +66,11 @@ class SubmitShiftTest extends TestCase
         $this->assertDatabaseCount('t_shift_details', 0);
     }
 
-    public function test_closed_expired_missing_and_deleted_requests_are_rejected(): void
+    public function test_closed_missing_and_deleted_requests_are_rejected(): void
     {
         $payload = $this->payload();
         $this->actingAs(User::factory()->create()->refresh());
-        foreach ([['submission_deadline' => '2000-01-01 23:59:59'], ['deleted_at' => now()]] as $changes) {
+        foreach ([['status' => 1], ['deleted_at' => now()]] as $changes) {
             DB::table('t_shift_requests')->where('id', $payload['shift_request_id'])->update($changes);
             $this->postJson('/api/shifts', $payload)->assertUnprocessable();
         }
@@ -79,13 +79,15 @@ class SubmitShiftTest extends TestCase
         $this->assertDatabaseCount('t_shifts', 0);
     }
 
-    public function test_guests_and_admins_cannot_submit(): void
+    public function test_guests_cannot_submit_and_admins_can_submit(): void
     {
         $payload = $this->payload();
         $this->postJson('/api/shifts', $payload)->assertUnauthorized();
         $admin = User::factory()->create()->refresh();
+        $admin->user_type = 1;
+        $admin->role_type = 1;
         $admin->auth_type = 1;
         $admin->save();
-        $this->actingAs($admin)->postJson('/api/shifts', $payload)->assertForbidden();
+        $this->actingAs($admin)->postJson('/api/shifts', $payload)->assertOk();
     }
 }

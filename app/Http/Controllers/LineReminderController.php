@@ -11,14 +11,14 @@ final class LineReminderController extends Controller
 {
     public function __invoke(Request $request, int $requestId, LineShiftNotifier $notifier)
     {
-        abort_unless($request->user()->auth_type === 1, 403);
+        abort_unless($request->user()->canManageShifts(), 403);
 
         return Cache::lock('line-reminder:'.$requestId, 30)->get(function () use ($requestId, $notifier) {
             abort_if(Cache::has('line-reminder-sent:'.$requestId), 429, '再通知は5分後にお試しください。');
             $message = DB::transaction(function () use ($requestId, $notifier) {
                 $period = DB::table('t_shift_requests')->where('id', $requestId)->whereNull('deleted_at')->lockForUpdate()->first();
                 abort_unless($period, 404);
-                abort_if((int) $period->status !== 0 || $period->submission_deadline < now('Asia/Tokyo')->startOfDay()->format('Y-m-d H:i:s'), 422, '受付中の依頼のみ通知できます。');
+                abort_if((int) $period->status !== 0 || $period->submission_deadline >= now('Asia/Tokyo')->startOfDay()->format('Y-m-d H:i:s'), 422, '提出期限を過ぎた未確定の依頼のみ通知できます。');
 
                 return $notifier->enqueue($requestId, 'reminder');
             });

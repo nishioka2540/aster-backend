@@ -4,8 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Application\Shift\GetShiftStatusUseCase;
 use App\Domain\Shift\CastShiftSubmission;
-use App\Models\User;
 use App\Domain\Shift\ShiftSubmissionPeriod;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -16,9 +16,9 @@ final class GetShiftStatusController extends Controller
 {
     public function __invoke(Request $request, GetShiftStatusUseCase $useCase): JsonResponse
     {
-        abort_unless($request->user()->auth_type === 1, 403);
+        abort_unless($request->user()->canManageShifts(), 403);
 
-        $ulids = User::where('auth_type', 0)->pluck('ulid', 'id');
+        $ulids = User::where('user_type', User::TYPE_CAST)->pluck('ulid', 'id');
         $users = fn (array $casts) => array_map(
             fn (CastShiftSubmission $cast) => ['id' => $ulids[$cast->userId], 'name' => $cast->name],
             $casts,
@@ -29,6 +29,8 @@ final class GetShiftStatusController extends Controller
                 'id' => $period->requestId,
                 'period_start' => $period->periodStart,
                 'period_end' => $period->periodEnd,
+                'submission_deadline' => $period->submissionDeadline,
+                'reminder_available' => $period->submissionDeadline < now('Asia/Tokyo')->startOfDay()->format('Y-m-d H:i:s'),
                 'submitted' => $users($period->submitted()),
                 'unsubmitted' => $users($period->unsubmitted()),
             ],

@@ -3,7 +3,7 @@ namespace App\Http\Requests;
 use Illuminate\Foundation\Http\FormRequest;
 final class DecideShiftScheduleRequest extends FormRequest
 {
-    public function authorize(): bool { return $this->user()?->auth_type === 1; }
+    public function authorize(): bool { return $this->user()?->canManageShifts(); }
     public function rules(): array
     {
         return ['casts' => ['present', 'array'], 'casts.*.id' => ['required', 'ulid', 'distinct'],

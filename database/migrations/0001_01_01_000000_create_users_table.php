@@ -18,6 +18,8 @@ return new class extends Migration
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password')->nullable();
             $table->unsignedTinyInteger('auth_type')->default(0);
+            $table->unsignedTinyInteger('user_type')->default(2)->comment('1:黒服 2:キャスト');
+            $table->unsignedTinyInteger('role_type')->default(3)->comment('黒服 1:店長 2:Manager 3:チーフ 4:リーダー 5:その他 / キャスト 1:ママ 2:チーママ 3:その他');
             $table->rememberToken();
             $table->timestamps();
             $table->softDeletes();

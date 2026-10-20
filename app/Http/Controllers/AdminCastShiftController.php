@@ -19,8 +19,8 @@ final class AdminCastShiftController extends Controller
 {
     public function show(Request $request, int $requestId, string $castId): JsonResponse
     {
-        abort_unless($request->user()->auth_type === 1, 403);
-        $cast = User::where('auth_type', 0)->where('ulid', $castId)->firstOrFail();
+        abort_unless($request->user()->canManageShifts(), 403);
+        $cast = User::where('user_type', User::TYPE_CAST)->where('ulid', $castId)->firstOrFail();
         $period = DB::table('t_shift_requests')->where('id', $requestId)->whereNull('deleted_at')->first();
         abort_unless($period, 404);
         $period->finalized_dates = DB::table('t_shift_schedule_days')->where('shift_request_id', $requestId)->where('status', 2)->whereNull('deleted_at')->pluck('work_date')->all();
@@ -42,7 +42,7 @@ final class AdminCastShiftController extends Controller
 
     public function update(AdminSubmitShiftRequest $request, int $requestId, string $castId, SubmitShiftUseCase $useCase): JsonResponse
     {
-        $cast = User::where('auth_type', 0)->where('ulid', $castId)->firstOrFail();
+        $cast = User::where('user_type', User::TYPE_CAST)->where('ulid', $castId)->firstOrFail();
         $data = $request->validated();
         abort_unless((int) $data['shift_request_id'] === $requestId, 422);
         try {

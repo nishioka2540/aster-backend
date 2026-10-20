@@ -6,7 +6,12 @@ use DomainException;
 
 final readonly class ShiftSchedule
 {
-    public function __construct(public int $requestId, public string $from, public string $to, public bool $confirmed) {}
+    public function __construct(public int $requestId, public string $from, public string $to, public bool $confirmed, public string $submissionDeadline) {}
+
+    public function confirmationAvailable(string $today): bool
+    {
+        return $today > substr($this->submissionDeadline, 0, 10);
+    }
 
     public function dates(): array
     {
@@ -52,8 +57,9 @@ final readonly class ShiftSchedule
         return $dates;
     }
 
-    public function confirm(array $decidedDates, ?array $targetDates = null): void
+    public function confirm(array $decidedDates, string $today, ?array $targetDates = null): void
     {
+        if (!$this->confirmationAvailable($today)) throw new DomainException('提出期限内はシフトを確定できません。提出期限の翌日から確定できます。');
         if ($this->confirmed) throw new DomainException('この期間はすでに確定済みです。');
         if (!($targetDates ?? $this->dates()) || array_diff($targetDates ?? $this->dates(), $decidedDates)) throw new DomainException('期間内のすべての平日を決定してください。');
     }

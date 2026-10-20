@@ -16,12 +16,11 @@ final readonly class Shift
         public DateTimeImmutable $submittedAt,
         string $periodStart,
         string $periodEnd,
-        DateTimeImmutable $deadline,
         bool $accepting,
         public ShiftStatus $status = ShiftStatus::Submitted,
         array $finalizedDates = [],
     ) {
-        if (! $accepting || $submittedAt->format('Y-m-d') > $deadline->format('Y-m-d')) {
+        if (! $accepting) {
             throw new DomainException('この依頼は受付を終了しています。');
         }
         $expected = [];

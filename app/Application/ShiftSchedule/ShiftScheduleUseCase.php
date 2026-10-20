@@ -4,6 +4,7 @@ namespace App\Application\ShiftSchedule;
 use App\Domain\ShiftSchedule\ShiftSchedule;
 use App\Domain\ShiftSchedule\ShiftScheduleRepository;
 use DomainException;
+use Carbon\CarbonImmutable;
 
 final readonly class ShiftScheduleUseCase
 {
@@ -23,7 +24,7 @@ final readonly class ShiftScheduleUseCase
     {
         $schedule = $this->find($id);
         $days = $this->repository->days($id);
-        return ['confirmed' => $schedule->confirmed, 'days' => array_map(fn ($date) => [
+        return ['confirmed' => $schedule->confirmed, 'confirmation_available' => $schedule->confirmationAvailable(CarbonImmutable::today('Asia/Tokyo')->format('Y-m-d')), 'days' => array_map(fn ($date) => [
             'date' => $date, 'confirmed' => $days[$date]['confirmed'] ?? false, 'count' => $days[$date]['count'] ?? 0, 'finalized' => $days[$date]['finalized'] ?? false,
         ], $schedule->dates())];
     }
@@ -50,7 +51,7 @@ final readonly class ShiftScheduleUseCase
             $schedule = $this->find($id, true);
             $days = $this->repository->days($id);
             $targets = $schedule->confirmationDates($from, $to);
-            $schedule->confirm(array_keys(array_filter($days, fn ($day) => $day['confirmed'])), $targets);
+            $schedule->confirm(array_keys(array_filter($days, fn ($day) => $day['confirmed'])), CarbonImmutable::today('Asia/Tokyo')->format('Y-m-d'), $targets);
             // Revalidate cast membership and times in case data changed after a day was decided.
             foreach ($targets as $date) {
                 $schedule->decide($date, $this->repository->assignments($id, $date), $this->repository->castIds($id, $date));

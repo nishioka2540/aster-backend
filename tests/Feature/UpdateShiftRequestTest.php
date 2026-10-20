@@ -12,7 +12,7 @@ class UpdateShiftRequestTest extends TestCase
 
     public function test_admin_can_update_all_fields_and_period_changes_require_resubmission_and_replanning(): void
     {
-        $admin = User::factory()->create(['auth_type' => 1])->refresh();
+        $admin = User::factory()->create(['auth_type' => 1, 'user_type' => 1, 'role_type' => 1])->refresh();
         $cast = User::factory()->create()->refresh();
         $payload = ['period_start' => '2026-10-19', 'period_end' => '2026-10-23', 'submission_deadline' => '2026-10-16 23:59:59', 'notice' => 'Original'];
         $id = DB::table('t_shift_requests')->insertGetId([...$payload, 'requested_by' => $admin->id]);

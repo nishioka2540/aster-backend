@@ -5,9 +5,9 @@ namespace App\Application\ShiftRequest;
 interface ShiftRequestAvailabilityQueryService
 {
     /** @return list<object> */
-    public function findAcceptingRequests(): array;
+    public function findAcceptingRequests(?int $userId = null): array;
 
-    public function isAccepting(int $requestId): bool;
+    public function isAccepting(int $requestId, ?int $userId = null): bool;
 
     public function latestConfirmedEnd(): ?string;
 }

@@ -8,7 +8,7 @@ class ReceiveShiftRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->auth_type === 1;
+        return $this->user()?->canManageShifts();
     }
 
     public function rules(\App\Application\ShiftRequest\ShiftRequestAvailabilityQueryService $availability): array

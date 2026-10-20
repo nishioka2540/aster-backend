@@ -11,6 +11,7 @@ final readonly class ShiftSubmissionPeriod
         public string $periodStart,
         public string $periodEnd,
         public array $casts,
+        public string $submissionDeadline,
     ) {}
 
     /** @return list<CastShiftSubmission> */

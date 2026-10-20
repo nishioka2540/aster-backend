@@ -19,7 +19,7 @@ final class EloquentShiftRepository implements ShiftRepository
         return DB::transaction($operation);
     }
 
-    public function findRequestForUpdate(int $requestId): ?array
+    public function findRequestForUpdate(int $requestId, int $userId): ?array
     {
         $request = DB::table('t_shift_requests')->where('id', $requestId)->whereNull('deleted_at')->lockForUpdate()->first();
 
@@ -28,7 +28,7 @@ final class EloquentShiftRepository implements ShiftRepository
             'period_end' => $request->period_end,
             'submission_deadline' => $request->submission_deadline,
             'finalized_dates' => DB::table('t_shift_schedule_days')->where('shift_request_id', $requestId)->where('status', 2)->whereNull('deleted_at')->pluck('work_date')->all(),
-            'accepting' => $this->availability->isAccepting($requestId),
+            'accepting' => $this->availability->isAccepting($requestId, $userId),
         ] : null;
     }
 

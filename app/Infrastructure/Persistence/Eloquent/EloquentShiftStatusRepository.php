@@ -7,17 +7,13 @@ use App\Domain\Shift\ShiftStatusRepository;
 use App\Domain\Shift\ShiftSubmissionPeriod;
 use Enum\ShiftStatus;
 use Illuminate\Support\Facades\DB;
-use App\Application\ShiftRequest\ShiftRequestAvailabilityQueryService;
 
 final class EloquentShiftStatusRepository implements ShiftStatusRepository
 {
-    public function __construct(private readonly ShiftRequestAvailabilityQueryService $availability)
-    {
-    }
-
     public function findAcceptingPeriods(): array
     {
-        $periods = $this->availability->findAcceptingRequests();
+        $periods = DB::table('t_shift_requests')->whereNull('deleted_at')->where('status', 0)
+            ->orderBy('period_start')->orderBy('id')->get()->all();
 
         if ($periods === []) {
             return [];
@@ -29,6 +25,7 @@ final class EloquentShiftStatusRepository implements ShiftStatusRepository
         return array_map(fn (object $period) => new ShiftSubmissionPeriod(
             (int) $period->id, $period->period_start, $period->period_end,
             [...($submitted[$period->id] ?? []), ...($unsubmitted[$period->id] ?? [])],
+            $period->submission_deadline,
         ), $periods);
     }
 
@@ -43,16 +40,14 @@ final class EloquentShiftStatusRepository implements ShiftStatusRepository
                 AND ts.deleted_at IS NULL
             INNER JOIN t_shift_requests tsr
                 ON tsr.id = ts.shift_request_id
-                AND tsr.submission_deadline >= :today
                 AND tsr.status = 0
                 AND tsr.deleted_at IS NULL
-            WHERE mu.auth_type = :cast_auth_type
+            WHERE mu.user_type = :cast_user_type
                 AND mu.deleted_at IS NULL
             ORDER BY tsr.period_start, tsr.id, mu.name, mu.id
             SQL, [
             'submitted' => ShiftStatus::Submitted->value,
-            'today' => \Carbon\CarbonImmutable::today('Asia/Tokyo')->format('Y-m-d H:i:s'),
-            'cast_auth_type' => 0,
+            'cast_user_type' => 2,
         ]);
 
         return $this->groupByRequest($rows);
@@ -66,21 +61,19 @@ final class EloquentShiftStatusRepository implements ShiftStatusRepository
                 COALESCE(ts.status, :not_started) AS shift_status
             FROM mst_users mu
             INNER JOIN t_shift_requests tsr
-                ON tsr.submission_deadline >= :today
-                AND tsr.status = 0
+                ON tsr.status = 0
                 AND tsr.deleted_at IS NULL
             LEFT OUTER JOIN t_shifts ts
                 ON ts.user_id = mu.id
                 AND ts.shift_request_id = tsr.id
                 AND ts.deleted_at IS NULL
-            WHERE mu.auth_type = :cast_auth_type
+            WHERE mu.user_type = :cast_user_type
                 AND mu.deleted_at IS NULL
                 AND (ts.id IS NULL OR ts.status <> :submitted)
             ORDER BY tsr.period_start, tsr.id, mu.name, mu.id
             SQL, [
             'not_started' => ShiftStatus::NotStarted->value,
-            'today' => \Carbon\CarbonImmutable::today('Asia/Tokyo')->format('Y-m-d H:i:s'),
-            'cast_auth_type' => 0,
+            'cast_user_type' => 2,
             'submitted' => ShiftStatus::Submitted->value,
         ]);
 

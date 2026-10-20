@@ -16,6 +16,8 @@ class ShiftDraftTest extends TestCase
     {
         $cast = User::factory()->create()->refresh();
         $admin = User::factory()->create()->refresh();
+        $admin->user_type = 1;
+        $admin->role_type = 1;
         $admin->auth_type = 1;
         $admin->save();
         $id = DB::table('t_shift_requests')->insertGetId([
@@ -27,7 +29,7 @@ class ShiftDraftTest extends TestCase
             'has_reservation' => true, 'note' => '下書き',
         ]]];
         $this->postJson('/api/shifts/draft', $payload)->assertUnauthorized();
-        $this->actingAs($admin)->postJson('/api/shifts/draft', $payload)->assertForbidden();
+        $this->actingAs($admin)->postJson('/api/shifts/draft', $payload)->assertOk();
         $response = $this->actingAs($cast)->postJson('/api/shifts/draft', [...$payload, 'user_id' => $admin->id])->assertOk();
         $this->assertDatabaseHas('t_shifts', ['id' => $response->json('id'), 'user_id' => $cast->id,
             'status' => ShiftStatus::Draft->value, 'submitted_at' => null]);
@@ -41,7 +43,7 @@ class ShiftDraftTest extends TestCase
         $payload['days'][] = ['work_date' => '2026-10-13', 'work' => false, 'has_reservation' => false];
         $this->postJson('/api/shifts', $payload)->assertOk()->assertJsonPath('id', $response->json('id'));
         $this->assertDatabaseHas('t_shifts', ['id' => $response->json('id'), 'status' => ShiftStatus::Submitted->value]);
-        $this->assertDatabaseCount('t_shifts', 1);
+        $this->assertDatabaseCount('t_shifts', 2);
         $other = User::factory()->create()->refresh();
         $this->actingAs($other)->getJson('/api/shifts/mine')->assertOk()->assertJsonPath('data', []);
         $this->actingAs($cast)->postJson('/api/shifts/draft', ['shift_request_id' => $id, 'days' => []])->assertUnprocessable();

@@ -45,6 +45,9 @@ Route::middleware(['auth', 'throttle:60,1'])->prefix('/api/admin/shift-requests/
 
 Route::get('/api/shifts/confirmed', [\App\Http\Controllers\ShiftScheduleController::class, 'mine'])->middleware(['auth', 'throttle:60,1']);
 
+Route::get('/api/shifts/confirmed-calendar', \App\Http\Controllers\ConfirmedShiftCalendarController::class)
+    ->middleware(['auth', 'throttle:60,1']);
+
 Route::put('/api/shift-requests/{requestId}', [ShiftRequestController::class, 'update'])
     ->whereNumber('requestId')->middleware(['auth', 'throttle:30,1']);
 
