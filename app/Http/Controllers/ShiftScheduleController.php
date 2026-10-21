@@ -46,6 +46,10 @@ final class ShiftScheduleController extends Controller
             $result = $useCase->assignments($requestId, $date);
             $ulids = User::where('user_type', User::TYPE_CAST)->pluck('ulid', 'id');
             $result['casts'] = array_map(fn ($cast) => [...$cast, 'id' => $ulids[$cast['id']]], $result['casts']);
+            $result['candidates'] = $result['confirmed']
+                ? User::where('user_type', User::TYPE_CAST)->whereNotIn('ulid', array_column($result['casts'], 'id'))
+                    ->orderBy('name')->get(['ulid', 'name'])->map(fn ($cast) => ['id' => $cast->ulid, 'name' => $cast->name])->all()
+                : [];
 
             return $result;
         });

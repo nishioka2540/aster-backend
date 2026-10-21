@@ -227,6 +227,43 @@ class ShiftScheduleTest extends TestCase
         $this->assertDatabaseCount('t_shift_requests', 2);
     }
 
+    public function test_admin_can_add_unavailable_and_unsubmitted_casts_to_a_finalized_day(): void
+    {
+        [$admin, $cast, $id, $url] = $this->fixture();
+        $unavailable = User::factory()->create()->refresh();
+        $shift = $this->submitAvailable($unavailable, $id);
+        DB::table('t_shift_details')->where('shift_id', $shift)->update(['availability' => 0]);
+        $missing = User::factory()->create()->refresh();
+        $deleted = User::factory()->create()->refresh();
+        $deleted->delete();
+        $this->actingAs($admin);
+        $payload = ['casts' => $this->casts($cast)];
+        $this->getJson("$url/days/2026-10-16")->assertJsonCount(0, 'candidates');
+        $this->putJson("$url/days/2026-10-16", ['casts' => [...$payload['casts'], ...$this->casts($missing)]])->assertUnprocessable();
+        $this->putJson("$url/days/2026-10-16", $payload)->assertOk();
+        $this->postJson("$url/confirm", ['from' => '2026-10-16', 'to' => '2026-10-16'])->assertOk();
+        $this->getJson("$url/days/2026-10-16")->assertJsonCount(2, 'candidates')
+            ->assertJsonFragment(['id' => $missing->ulid, 'name' => $missing->name]);
+        $payload['casts'] = [...$payload['casts'], ...$this->casts($unavailable), ...$this->casts($missing)];
+        $invalid = $payload;
+        $invalid['casts'][2]['start'] = '19:00';
+        $this->putJson("$url/days/2026-10-16", $invalid)->assertUnprocessable();
+        $this->putJson("$url/days/2026-10-16", $payload)->assertOk();
+        $this->getJson("$url/days/2026-10-16")->assertJsonPath('confirmed', true)
+            ->assertJsonCount(3, 'casts')->assertJsonCount(0, 'candidates');
+        $this->getJson($url)->assertJsonPath('days.0.finalized', true)->assertJsonPath('days.0.count', 3);
+        $this->putJson("$url/days/2026-10-16", ['casts' => $this->casts($cast)])->assertUnprocessable();
+        $this->putJson("$url/days/2026-10-16", ['casts' => [...$payload['casts'], ...$this->casts($deleted)]])->assertUnprocessable();
+        $payload['casts'][2]['start'] = '21:00';
+        $this->putJson("$url/days/2026-10-16", $payload)->assertOk();
+        $this->assertDatabaseHas('t_shift_details', ['shift_id' => $shift, 'work_date' => '2026-10-16', 'availability' => 0]);
+        $this->assertDatabaseMissing('t_shifts', ['user_id' => $missing->id]);
+        $this->actingAs($missing)->getJson('/api/shifts/confirmed')->assertJsonPath('data.0.shifts.0.start', '21:00');
+        $this->actingAs($admin)->getJson('/api/shifts/confirmed-calendar?from=2026-10-16&to=2026-10-16')
+            ->assertOk()->assertJsonPath('data.0.count', 3);
+        $this->actingAs($missing)->putJson("$url/days/2026-10-16", $payload)->assertForbidden();
+    }
+
     public function test_editing_finalized_day_preserves_publication_and_rejects_invalid_changes(): void
     {
         [$admin, $cast, $id, $url] = $this->fixture();

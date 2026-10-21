@@ -38,7 +38,12 @@ class LateShiftSubmissionTest extends TestCase
                 $url = "/api/admin/shift-requests/$id/casts/{$cast->ulid}";
                 if ($byAdmin) {
                     $this->actingAs($admin)->putJson($url, $payload)->assertOk();
-                    $this->putJson($url, $payload)->assertUnprocessable();
+                    $payload['days'][0] = ['work_date' => '2026-10-12', 'work' => true,
+                        'start_time' => '20:00', 'end_time' => '00:00', 'has_reservation' => true, 'note' => '期限後の管理者編集'];
+                    $this->putJson($url, $payload)->assertOk();
+                    $this->getJson($url)->assertOk()->assertJsonPath('days.0.work', true)
+                        ->assertJsonPath('days.0.note', '期限後の管理者編集');
+                    $payload['days'][0] = ['work_date' => '2026-10-12', 'work' => false, 'has_reservation' => false];
                 } else {
                     $this->postJson('/api/shifts/draft', $payload)->assertOk();
                     $this->postJson('/api/shifts', $payload)->assertOk();

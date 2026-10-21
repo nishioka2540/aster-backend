@@ -27,13 +27,16 @@ final readonly class ShiftSchedule
         if (!in_array($date, $this->dates(), true)) throw new DomainException('対象期間内の平日を指定してください。');
     }
 
-    public function decide(string $date, array $casts, array $castIds): void
+    public function decide(string $date, array $casts, array $castIds, array $additionalIds = []): void
     {
         $this->validateDate($date);
         $ids = array_map(fn ($cast) => (int) $cast['id'], $casts);
         sort($ids);
         sort($castIds);
-        if ($ids !== $castIds) throw new DomainException('対象キャストが変更されています。画面を読み込み直してください。');
+        if (count($ids) !== count(array_unique($ids)) || array_diff($castIds, $ids)
+            || array_diff($ids, [...$castIds, ...$additionalIds])) {
+            throw new DomainException('対象キャストが変更されています。画面を読み込み直してください。');
+        }
         foreach ($casts as $cast) {
             if (mb_strlen($cast['note'] ?? '') > 1000) throw new DomainException('備考は1000文字以内にしてください。');
             if (!$cast['work']) continue;

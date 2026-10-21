@@ -40,7 +40,9 @@ final readonly class ShiftScheduleUseCase
     {
         $this->repository->transaction(function () use ($id, $date, $casts, $adminId) {
             $schedule = $this->find($id, true);
-            $schedule->decide($date, $casts, $this->repository->castIds($id, $date));
+            $finalized = $this->repository->days($id)[$date]['finalized'] ?? false;
+            $schedule->decide($date, $casts, $this->repository->castIds($id, $date),
+                $finalized ? $this->repository->allCastIds() : []);
             $this->repository->saveDay($id, $date, $casts, $adminId);
         });
     }

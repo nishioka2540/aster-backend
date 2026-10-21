@@ -27,6 +27,7 @@ final class EloquentShiftRepository implements ShiftRepository
             'period_start' => $request->period_start,
             'period_end' => $request->period_end,
             'submission_deadline' => $request->submission_deadline,
+            'open' => (int) $request->status === 0,
             'finalized_dates' => DB::table('t_shift_schedule_days')->where('shift_request_id', $requestId)->where('status', 2)->whereNull('deleted_at')->pluck('work_date')->all(),
             'accepting' => $this->availability->isAccepting($requestId, $userId),
         ] : null;

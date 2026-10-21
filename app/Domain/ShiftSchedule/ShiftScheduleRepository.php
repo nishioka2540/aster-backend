@@ -7,6 +7,7 @@ interface ShiftScheduleRepository
     public function find(int $requestId, bool $lock = false): ?ShiftSchedule;
     public function publishedForCast(int $castId): array;
     public function castIds(int $requestId, string $date): array;
+    public function allCastIds(): array;
     public function days(int $requestId): array;
     public function assignments(int $requestId, string $date): array;
     public function saveDay(int $requestId, string $date, array $casts, int $adminId): void;

@@ -39,16 +39,33 @@ final class EloquentShiftScheduleRepository implements ShiftScheduleRepository
 
     public function castIds(int $requestId, string $date): array
     {
+        $finalized = DB::table('t_shift_schedule_days')->where('shift_request_id', $requestId)
+            ->where('work_date', $date)->where('status', 2)->whereNull('deleted_at')->value('id');
         return DB::table('mst_users as cast')
             ->where('cast.user_type', 2)->whereNull('cast.deleted_at')
-            ->whereExists(function ($query) use ($requestId, $date) {
+            ->where(function ($eligible) use ($requestId, $date, $finalized) {
+            $eligible->whereExists(function ($query) use ($requestId, $date) {
                 $query->selectRaw('1')->from('t_shift_details as detail')
                     ->join('t_shifts as shift', 'shift.id', '=', 'detail.shift_id')
                     ->whereColumn('shift.user_id', 'cast.id')
                     ->where('shift.shift_request_id', $requestId)->where('shift.status', 2)
                     ->where('detail.work_date', $date)->where('detail.availability', true)
                     ->whereNull('shift.deleted_at')->whereNull('detail.deleted_at');
+            });
+            if ($finalized) {
+                $eligible->orWhereExists(function ($query) use ($finalized) {
+                    $query->selectRaw('1')->from('t_shift_assignments as assignment')
+                        ->whereColumn('assignment.user_id', 'cast.id')
+                        ->where('assignment.shift_schedule_day_id', $finalized)->whereNull('assignment.deleted_at');
+                });
+            }
             })->orderBy('cast.id')->pluck('cast.id')->map(fn ($id) => (int) $id)->all();
+    }
+
+    public function allCastIds(): array
+    {
+        return DB::table('mst_users')->where('user_type', 2)->whereNull('deleted_at')
+            ->pluck('id')->map(fn ($id) => (int) $id)->all();
     }
 
     public function days(int $requestId): array
@@ -74,14 +91,14 @@ final class EloquentShiftScheduleRepository implements ShiftScheduleRepository
     {
         $day = DB::table('t_shift_schedule_days as day')
             ->where('day.shift_request_id', $requestId)->where('day.work_date', $date)
-            ->whereNull('day.deleted_at')->select('day.id')->first();
+            ->whereNull('day.deleted_at')->select('day.id', 'day.status')->first();
         $saved = $day ? DB::table('t_shift_assignments')->where('shift_schedule_day_id', $day->id)->whereNull('deleted_at')->get()->keyBy('user_id') : collect();
         $submitted = DB::table('t_shift_details as detail')->join('t_shifts as shift', 'shift.id', '=', 'detail.shift_id')
             ->where('shift.shift_request_id', $requestId)->where('shift.status', 2)->where('detail.work_date', $date)
             ->whereNull('shift.deleted_at')->whereNull('detail.deleted_at')->select('detail.*', 'shift.user_id')->get()->keyBy('user_id');
         return DB::table('mst_users')->whereIn('id', $this->castIds($requestId, $date))->orderBy('id')->get()->map(function ($cast) use ($saved, $submitted, $day) {
             $value = $saved->get($cast->id) ?? $submitted->get($cast->id);
-            $work = $value && (bool) ($saved->has($cast->id) ? $value->work : $value->availability);
+            $work = $value && (bool) ($saved->has($cast->id) ? $value->work : ((int) ($day->status ?? 0) !== 2 && $value->availability));
             return ['id' => (int) $cast->id, 'name' => $cast->name, 'work' => $work,
                 'start' => $value?->start_time ? substr($value->start_time, 0, 5) : '20:00',
                 'end' => $value?->end_time ? ((bool) $value->ends_next_day ? '24:00' : substr($value->end_time, 0, 5)) : '24:00',

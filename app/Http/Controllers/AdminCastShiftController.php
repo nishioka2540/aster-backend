@@ -49,7 +49,7 @@ final class AdminCastShiftController extends Controller
             $id = DB::transaction(function () use ($requestId, $cast, $data, $useCase) {
                 // キャストの保存と同じ依頼行をロックし、下書きへの変更と競合させない。
                 DB::table('t_shift_requests')->where('id', $requestId)->lockForUpdate()->first();
-                return $useCase->execute($requestId, $cast->id, $data['days']);
+                return $useCase->execute($requestId, $cast->id, $data['days'], byAdmin: true);
             });
         } catch (DomainException $exception) {
             throw ValidationException::withMessages(['days' => $exception->getMessage()]);
