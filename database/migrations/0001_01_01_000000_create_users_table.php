@@ -11,8 +11,14 @@ return new class extends Migration
      */
     public function up(): void
     {
+        Schema::create('login_id_sequences', function (Blueprint $table) {
+            $table->string('prefix', 4)->primary();
+            $table->unsignedInteger('last_number')->default(0);
+        });
+
         Schema::create('mst_users', function (Blueprint $table) {
             $table->id();
+            $table->string('login_id', 9)->unique();
             $table->string('name');
             $table->string('email')->nullable()->unique();
             $table->timestamp('email_verified_at')->nullable();
@@ -47,6 +53,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::dropIfExists('mst_users');
+        Schema::dropIfExists('login_id_sequences');
         Schema::dropIfExists('password_reset_tokens');
         Schema::dropIfExists('sessions');
     }

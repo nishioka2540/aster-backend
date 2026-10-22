@@ -28,7 +28,7 @@ final class ConfirmedShiftCalendarController extends Controller
             ->join('t_shift_requests as request', 'request.id', '=', 'day.shift_request_id')
             ->where('day.status', 2)->whereNull('day.deleted_at')->whereNull('request.deleted_at')
             ->whereBetween('day.work_date', [$data['from'], $data['to']])
-            ->select('day.id', 'day.work_date')->get();
+            ->select('day.id', 'day.work_date', 'day.shift_request_id')->get();
         $casts = DB::table('t_shift_assignments as assignment')
             ->join('mst_users as cast', 'cast.id', '=', 'assignment.user_id')
             ->whereIn('assignment.shift_schedule_day_id', $days->pluck('id'))
@@ -49,7 +49,8 @@ final class ConfirmedShiftCalendarController extends Controller
                     'end' => $cast->ends_next_day ? '24:00' : substr($cast->end_time, 0, 5),
                 ])->all();
             $result[] = ['date' => $date->toDateString(), 'confirmed' => $dateDays->isNotEmpty(),
-                'count' => count($members), 'casts' => $members];
+                'count' => count($members), 'casts' => $members,
+                ...($request->user()->canManageShifts() ? ['request_ids' => $dateDays->pluck('shift_request_id')->unique()->values()->all()] : [])];
         }
 
         return response()->json(['data' => $result]);

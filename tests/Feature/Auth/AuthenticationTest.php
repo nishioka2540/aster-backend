@@ -15,7 +15,7 @@ class AuthenticationTest extends TestCase
         $user = User::factory()->create();
 
         $response = $this->post('/login', [
-            'email' => $user->email,
+            'login_id' => $user->login_id,
             'password' => 'password',
         ]);
 
@@ -28,10 +28,27 @@ class AuthenticationTest extends TestCase
         $user = User::factory()->create();
 
         $this->post('/login', [
-            'email' => $user->email,
+            'login_id' => $user->login_id,
             'password' => 'wrong-password',
         ]);
 
+        $this->assertGuest();
+    }
+
+    public function test_email_cannot_be_used_instead_of_login_id(): void
+    {
+        $user = User::factory()->create();
+        $this->postJson('/login', ['email' => $user->email, 'password' => 'password'])
+            ->assertUnprocessable()->assertJsonValidationErrors('login_id');
+        $this->assertGuest();
+    }
+
+    public function test_deleted_user_cannot_log_in(): void
+    {
+        $user = User::factory()->create();
+        $user->delete();
+        $this->postJson('/login', ['login_id' => $user->login_id, 'password' => 'password'])
+            ->assertUnprocessable();
         $this->assertGuest();
     }
 

@@ -14,6 +14,13 @@ class User extends Authenticatable
     /** @use HasFactory<\Database\Factories\UserFactory> */
     use HasFactory, HasUlids, Notifiable, SoftDeletes;
 
+    protected static function booted(): void
+    {
+        static::creating(function (User $user) {
+            $user->login_id = app(\App\Services\LoginIdGenerator::class)->next((int) $user->user_type);
+        });
+    }
+
     public const TYPE_STAFF = 1;
     public const TYPE_CAST = 2;
 

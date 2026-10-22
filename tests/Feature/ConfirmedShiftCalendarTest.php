@@ -64,6 +64,14 @@ class ConfirmedShiftCalendarTest extends TestCase
         $this->assertFalse($data[3]['confirmed']);
         $this->assertSame([], $data[3]['casts']);
         $this->assertSame(0, $data[4]['count']);
+        foreach ([1, 2] as $role) {
+            $manager = User::factory()->create(['user_type' => 1, 'role_type' => $role]);
+            $this->actingAs($manager)->getJson(self::URL)->assertOk()
+                ->assertJsonPath('data.0.request_ids', [$request])
+                ->assertJsonPath('data.1.request_ids', [])
+                ->assertJsonPath('data.2.request_ids', [$request]);
+        }
+        $this->actingAs($leader);
         DB::table('t_shift_requests')->where('id', $request)->update(['deleted_at' => now()]);
         $this->getJson(self::URL)->assertOk()->assertJsonPath('data.0.confirmed', false)->assertJsonPath('data.0.casts', []);
     }
