@@ -9,7 +9,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Validation\ValidationException;
 
 /**
- * キャスト本人の勤務希望を受け取り、シフトを提出する。
+ * キャスト本人の勤務希望を受け取り、入力を検証する。
+ * シフトDomainの生成・業務検証・永続化をUsecaseへ委譲する。
  */
 class SubmitShiftController extends Controller
 {

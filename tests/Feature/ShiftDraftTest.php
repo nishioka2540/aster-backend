@@ -14,14 +14,15 @@ class ShiftDraftTest extends TestCase
 
     public function test_partial_draft_is_restored_and_can_be_submitted_without_duplicates(): void
     {
-        $cast = User::factory()->create()->refresh();
-        $admin = User::factory()->create()->refresh();
+        $cast = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create()->refresh();
+        $admin = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create()->refresh();
         $admin->user_type = 1;
         $admin->role_type = 1;
         $admin->auth_type = 1;
         $admin->save();
+        \Tests\Support\StoreFixtures::enroll($admin);
         $id = DB::table('t_shift_requests')->insertGetId([
-            'requested_by' => $admin->id, 'period_start' => '2026-10-12', 'period_end' => '2026-10-13',
+            'store_id' => \Tests\Support\StoreFixtures::storeId(), 'requested_by' => $admin->id, 'period_start' => '2026-10-12', 'period_end' => '2026-10-13',
             'submission_deadline' => '2099-10-09 23:59:59',
         ]);
         $payload = ['shift_request_id' => $id, 'days' => [[
@@ -44,7 +45,7 @@ class ShiftDraftTest extends TestCase
         $this->postJson('/api/shifts', $payload)->assertOk()->assertJsonPath('id', $response->json('id'));
         $this->assertDatabaseHas('t_shifts', ['id' => $response->json('id'), 'status' => ShiftStatus::Submitted->value]);
         $this->assertDatabaseCount('t_shifts', 2);
-        $other = User::factory()->create()->refresh();
+        $other = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create()->refresh();
         $this->actingAs($other)->getJson('/api/shifts/mine')->assertOk()->assertJsonPath('data', []);
         $this->actingAs($cast)->postJson('/api/shifts/draft', ['shift_request_id' => $id, 'days' => []])->assertUnprocessable();
         $this->getJson('/api/shifts/mine')->assertJsonPath('data.0.status', ShiftStatus::Submitted->value)

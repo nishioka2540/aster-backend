@@ -52,24 +52,29 @@ class UserSchemaTest extends TestCase
         $this->assertNotSame($first->ulid, $deleted->ulid);
     }
 
-    public function test_login_ids_are_sequential_per_type_and_never_reused(): void
+    public function test_login_ids_use_actual_user_id_and_access_role_and_remain_stable(): void
     {
         $staff = User::factory()->create(['user_type' => User::TYPE_STAFF]);
         $cast = User::factory()->create();
-        $this->assertSame('0101A0001', $staff->login_id);
-        $this->assertSame('0102A0001', $cast->login_id);
+        $this->assertNull($cast->login_id);
+        \Tests\Support\StoreFixtures::enroll($staff);
+        \Tests\Support\StoreFixtures::enroll($cast);
+        $this->assertSame('0102A0001', $staff->login_id);
+        $this->assertSame('0101A0002', $cast->login_id);
         $cast->delete();
         $next = User::factory()->create();
-        $this->assertSame('0102A0002', $next->login_id);
+        \Tests\Support\StoreFixtures::enroll($next);
+        $this->assertSame('0101A0003', $next->login_id);
         $next->update(['name' => 'Changed']);
-        $this->assertSame('0102A0002', $next->fresh()->login_id);
+        $this->assertSame('0101A0003', $next->fresh()->login_id);
     }
 
-    public function test_login_id_letter_advances_after_9999(): void
+    public function test_login_id_uses_minimum_four_digits_without_changing_letter_after_9999(): void
     {
-        \Illuminate\Support\Facades\DB::table('login_id_sequences')->insert(['prefix' => '0102', 'last_number' => 9998]);
-        $this->assertSame('0102A9999', User::factory()->create()->login_id);
-        $this->assertSame('0102B0001', User::factory()->create()->login_id);
+        $user = User::factory()->create(['id' => 10000]);
+        \Tests\Support\StoreFixtures::enroll($user);
+        $this->assertSame('0101A10000', $user->login_id);
+        $this->postJson('/login', ['login_id' => $user->login_id, 'password' => 'password'])->assertNoContent();
     }
 
     public function test_deleted_user_is_excluded_and_can_be_restored(): void
@@ -84,5 +89,28 @@ class UserSchemaTest extends TestCase
 
         $this->assertNotNull(User::find($user->id));
         $this->assertNull($user->deleted_at);
+    }
+
+    public function test_login_id_uses_real_store_and_access_role_ids_and_stays_stable_across_stores(): void
+    {
+        $db = \Illuminate\Support\Facades\DB::class;
+        $db::table('mst_access_roles')->where('code', 'cast')->update(['id' => 17]);
+        $org = $db::table('t_organizations')->insertGetId(['ulid' => (string) \Illuminate\Support\Str::ulid(), 'name' => '組織']);
+        $db::table('t_store')->insert(['id' => 42, 'ulid' => (string) \Illuminate\Support\Str::ulid(), 'organization_id' => $org, 'name' => 'テスト店舗']);
+        $user = User::factory()->create(['id' => 23]);
+        \Tests\Support\StoreFixtures::enroll($user);
+        $this->assertSame('4217A0023', $user->login_id);
+        $other = $db::table('t_store')->insertGetId(['ulid' => (string) \Illuminate\Support\Str::ulid(), 'organization_id' => $org, 'name' => '他店舗']);
+        $db::table('t_store_users')->insert(['store_id' => $other, 'user_id' => $user->id, 'user_type' => 2, 'access_role_id' => 17]);
+        $this->assertSame('4217A0023', app(\App\Services\LoginIdGenerator::class)->assign($user, $other, 17));
+        $this->postJson('/login', ['login_id' => $user->login_id, 'password' => 'password'])->assertNoContent();
+    }
+
+    public function test_existing_login_id_is_kept_and_remains_usable(): void
+    {
+        $user = User::factory()->create(['login_id' => '0102B0001']);
+        \Tests\Support\StoreFixtures::enroll($user);
+        $this->assertSame('0102B0001', $user->fresh()->login_id);
+        $this->postJson('/login', ['login_id' => $user->login_id, 'password' => 'password'])->assertNoContent();
     }
 }

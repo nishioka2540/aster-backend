@@ -2,29 +2,18 @@
 
 namespace App\Http\Controllers;
 
-use App\Application\ShiftRequest\LineShiftNotifier;
+use App\Application\ShiftRequest\SendLineReminderUseCase;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\DB;
 
+/**
+ * 管理者のシフト再通知リクエストを認可し、通知Usecaseを呼び出す。
+ */
 final class LineReminderController extends Controller
 {
-    public function __invoke(Request $request, int $requestId, LineShiftNotifier $notifier)
+    public function __invoke(Request $request, int $requestId, SendLineReminderUseCase $useCase)
     {
         abort_unless($request->user()->canManageShifts(), 403);
 
-        return Cache::lock('line-reminder:'.$requestId, 30)->get(function () use ($requestId, $notifier) {
-            abort_if(Cache::has('line-reminder-sent:'.$requestId), 429, '再通知は5分後にお試しください。');
-            $message = DB::transaction(function () use ($requestId, $notifier) {
-                $period = DB::table('t_shift_requests')->where('id', $requestId)->whereNull('deleted_at')->lockForUpdate()->first();
-                abort_unless($period, 404);
-                abort_if((int) $period->status !== 0 || $period->submission_deadline >= now('Asia/Tokyo')->startOfDay()->format('Y-m-d H:i:s'), 422, '提出期限を過ぎた未確定の依頼のみ通知できます。');
-
-                return $notifier->enqueue($requestId, 'reminder');
-            });
-            Cache::put('line-reminder-sent:'.$requestId, true, 300);
-
-            return response()->json(['message' => $message]);
-        }, fn () => abort(429, '通知を処理中です。'));
+        return response()->json(['message' => $useCase->execute($requestId)]);
     }
 }

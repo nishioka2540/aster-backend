@@ -13,10 +13,10 @@ class AdminCastShiftTest extends TestCase
 
     public function test_admin_can_submit_for_a_cast_without_a_draft(): void
     {
-        $admin = User::factory()->create(['auth_type' => 1, 'user_type' => 1, 'role_type' => 1])->refresh();
-        $cast = User::factory()->create()->refresh();
+        $admin = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create(['auth_type' => 1, 'user_type' => 1, 'role_type' => 1])->refresh();
+        $cast = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create()->refresh();
         $id = DB::table('t_shift_requests')->insertGetId([
-            'requested_by' => $admin->id, 'period_start' => '2026-11-02', 'period_end' => '2026-11-02',
+            'store_id' => \Tests\Support\StoreFixtures::storeId(), 'requested_by' => $admin->id, 'period_start' => '2026-11-02', 'period_end' => '2026-11-02',
             'submission_deadline' => '2099-10-09 23:59:59',
         ]);
         $url = "/api/admin/shift-requests/$id/casts/{$cast->ulid}";
@@ -32,14 +32,15 @@ class AdminCastShiftTest extends TestCase
 
     public function test_admin_can_read_register_and_edit_a_cast_submission(): void
     {
-        $admin = User::factory()->create()->refresh();
+        $admin = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create()->refresh();
         $admin->user_type = 1;
         $admin->role_type = 1;
         $admin->auth_type = 1;
         $admin->save();
-        $cast = User::factory()->create()->refresh();
+        \Tests\Support\StoreFixtures::enroll($admin);
+        $cast = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create()->refresh();
         $id = DB::table('t_shift_requests')->insertGetId([
-            'requested_by' => $admin->id, 'period_start' => '2026-10-12', 'period_end' => '2026-10-12',
+            'store_id' => \Tests\Support\StoreFixtures::storeId(), 'requested_by' => $admin->id, 'period_start' => '2026-10-12', 'period_end' => '2026-10-12',
             'submission_deadline' => '2099-10-09 23:59:59',
         ]);
         $url = "/api/admin/shift-requests/$id/casts/{$cast->ulid}";

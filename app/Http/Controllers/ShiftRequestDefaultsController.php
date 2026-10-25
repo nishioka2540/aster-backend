@@ -1,21 +1,20 @@
 <?php
+
 namespace App\Http\Controllers;
 
-use App\Application\ShiftRequest\ShiftRequestAvailabilityQueryService;
-use Carbon\CarbonImmutable;
+use App\Application\Query\ShiftRequestDefaultsQueryService;
 use Illuminate\Http\Request;
 
 /**
- * 管理者向けに確定済みシフトの最終日と、次の提出依頼の開始日候補を返す。
+ * 管理者向けに次回のシフト依頼の初期値を返す。
+ * 閲覧権限を検証し、日付候補と未確定依頼の取得をQueryServiceへ委譲する。
  */
 final class ShiftRequestDefaultsController extends Controller
 {
-    public function __invoke(Request $request, ShiftRequestAvailabilityQueryService $availability)
+    public function __invoke(Request $request, ShiftRequestDefaultsQueryService $service)
     {
         abort_unless($request->user()->canManageShifts(), 403);
-        $end = $availability->latestConfirmedEnd();
-        $start = $end ? CarbonImmutable::parse($end, 'Asia/Tokyo')->addWeekday()->toDateString() : null;
-        $deadline = $end ? null : CarbonImmutable::today('Asia/Tokyo')->addWeekday()->toDateString();
-        return response()->json(['period_start' => $start, 'submission_deadline' => $deadline, 'confirmed_end' => $end, 'has_unconfirmed_request' => \Illuminate\Support\Facades\DB::table('t_shift_requests')->whereNull('deleted_at')->where('status', 0)->exists()]);
+
+        return response()->json($service->get());
     }
 }

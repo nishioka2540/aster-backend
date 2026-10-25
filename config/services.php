@@ -7,6 +7,7 @@ return [
         'client_secret' => env('LINE_CHANNEL_SECRET'),
         'redirect_uri' => env('LINE_REDIRECT_URI', 'http://localhost/auth/line/callback'),
         'frontend_url' => env('FRONTEND_URL', 'http://localhost:5173'),
+        'official_account_id' => env('LINE_OFFICIAL_ACCOUNT_ID'),
     ],
 
     /*

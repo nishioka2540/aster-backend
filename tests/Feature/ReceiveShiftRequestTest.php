@@ -22,9 +22,10 @@ class ReceiveShiftRequestTest extends TestCase
 
     private function admin(): User
     {
-        $user = User::factory()->create();
+        $user = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create();
         $user->auth_type = 1;
         $user->save();
+        \Tests\Support\StoreFixtures::enroll($user);
         return $user;
     }
 
@@ -32,12 +33,12 @@ class ReceiveShiftRequestTest extends TestCase
     {
         $admin = $this->admin();
         $response = $this->actingAs($admin)->postJson('/api/shift-requests', [
-            ...$this->payload(), 'requested_by' => 999, 'status' => 9,
+            ...$this->payload(), 'store_id' => \Tests\Support\StoreFixtures::storeId(), 'requested_by' => 999, 'status' => 9,
         ])->assertCreated()->assertJsonStructure(['id', 'message']);
         $this->assertDatabaseCount('t_shift_requests', 1);
         $this->assertDatabaseHas('t_shift_requests', [
             'id' => $response->json('id'),
-            'requested_by' => $admin->id,
+            'store_id' => \Tests\Support\StoreFixtures::storeId(), 'requested_by' => $admin->id,
             ...$this->payload(),
             'deleted_at' => null,
         ]);
@@ -46,7 +47,7 @@ class ReceiveShiftRequestTest extends TestCase
     public function test_guest_and_cast_cannot_send_requests(): void
     {
         $this->postJson('/api/shift-requests', $this->payload())->assertUnauthorized();
-        $this->actingAs(User::factory()->create())
+        $this->actingAs(User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create())
             ->postJson('/api/shift-requests', $this->payload())->assertForbidden();
         $this->assertDatabaseCount('t_shift_requests', 0);
     }

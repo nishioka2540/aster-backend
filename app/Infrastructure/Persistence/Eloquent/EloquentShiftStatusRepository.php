@@ -5,14 +5,16 @@ namespace App\Infrastructure\Persistence\Eloquent;
 use App\Domain\Shift\CastShiftSubmission;
 use App\Domain\Shift\ShiftStatusRepository;
 use App\Domain\Shift\ShiftSubmissionPeriod;
+use App\Domain\ShiftRequest\ShiftRequestStatus;
 use Enum\ShiftStatus;
+use Enum\UserType;
 use Illuminate\Support\Facades\DB;
 
 final class EloquentShiftStatusRepository implements ShiftStatusRepository
 {
     public function findAcceptingPeriods(): array
     {
-        $periods = DB::table('t_shift_requests')->whereNull('deleted_at')->where('status', 0)
+        $periods = DB::table('t_shift_requests')->where('store_id', \App\Services\StoreAccess::storeId())->whereNull('deleted_at')->where('status', ShiftRequestStatus::Unconfirmed->value)
             ->orderBy('period_start')->orderBy('id')->get()->all();
 
         if ($periods === []) {
@@ -40,14 +42,15 @@ final class EloquentShiftStatusRepository implements ShiftStatusRepository
                 AND ts.deleted_at IS NULL
             INNER JOIN t_shift_requests tsr
                 ON tsr.id = ts.shift_request_id
-                AND tsr.status = 0
+                AND tsr.status = :unconfirmed_status
                 AND tsr.deleted_at IS NULL
-            WHERE mu.user_type = :cast_user_type
+            WHERE tsr.store_id = :store_id AND mu.id IN (SELECT membership.user_id FROM t_store_users membership INNER JOIN mst_access_roles access ON access.id = membership.access_role_id WHERE membership.store_id = tsr.store_id AND access.code = :cast_code AND membership.deleted_at IS NULL)
                 AND mu.deleted_at IS NULL
             ORDER BY tsr.period_start, tsr.id, mu.name, mu.id
             SQL, [
             'submitted' => ShiftStatus::Submitted->value,
-            'cast_user_type' => 2,
+            'unconfirmed_status' => ShiftRequestStatus::Unconfirmed->value,
+            'store_id' => \App\Services\StoreAccess::storeId(), 'cast_code' => 'cast',
         ]);
 
         return $this->groupByRequest($rows);
@@ -61,19 +64,20 @@ final class EloquentShiftStatusRepository implements ShiftStatusRepository
                 COALESCE(ts.status, :not_started) AS shift_status
             FROM mst_users mu
             INNER JOIN t_shift_requests tsr
-                ON tsr.status = 0
+                ON tsr.status = :unconfirmed_status
                 AND tsr.deleted_at IS NULL
             LEFT OUTER JOIN t_shifts ts
                 ON ts.user_id = mu.id
                 AND ts.shift_request_id = tsr.id
                 AND ts.deleted_at IS NULL
-            WHERE mu.user_type = :cast_user_type
+            WHERE tsr.store_id = :store_id AND mu.id IN (SELECT membership.user_id FROM t_store_users membership INNER JOIN mst_access_roles access ON access.id = membership.access_role_id WHERE membership.store_id = tsr.store_id AND access.code = :cast_code AND membership.deleted_at IS NULL)
                 AND mu.deleted_at IS NULL
                 AND (ts.id IS NULL OR ts.status <> :submitted)
             ORDER BY tsr.period_start, tsr.id, mu.name, mu.id
             SQL, [
             'not_started' => ShiftStatus::NotStarted->value,
-            'cast_user_type' => 2,
+            'unconfirmed_status' => ShiftRequestStatus::Unconfirmed->value,
+            'store_id' => \App\Services\StoreAccess::storeId(), 'cast_code' => 'cast',
             'submitted' => ShiftStatus::Submitted->value,
         ]);
 

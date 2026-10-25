@@ -4,7 +4,6 @@ namespace App\Http\Requests\Auth;
 
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -27,7 +26,7 @@ class LoginRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'login_id' => ['required', 'string', 'regex:/\A01(?:01|02)[A-Z][0-9]{4}\z/'],
+            'login_id' => ['required', 'string', 'max:64', 'regex:/\A(?:[0-9]{4,}A[0-9]{4,}|01(?:01|02)[A-Z][0-9]{4})\z/'],
             'password' => ['required', 'string'],
         ];
     }
@@ -40,16 +39,9 @@ class LoginRequest extends FormRequest
     public function authenticate(): void
     {
         $this->ensureIsNotRateLimited();
-
-        if (! Auth::attempt($this->only('login_id', 'password'), $this->boolean('remember'))) {
-            RateLimiter::hit($this->throttleKey());
-
-            throw ValidationException::withMessages([
-                'login_id' => __('auth.failed'),
-            ]);
-        }
-
-        RateLimiter::clear($this->throttleKey());
+        app(\App\Application\Auth\AuthenticateSessionUseCase::class)->login(
+            $this->only('login_id', 'password'), $this->boolean('remember'), $this->throttleKey(),
+        );
     }
 
     /**

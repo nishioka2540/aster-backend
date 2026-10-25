@@ -16,9 +16,9 @@ class LateShiftSubmissionTest extends TestCase
     public function test_unsubmitted_casts_can_save_and_submit_after_deadline_including_by_admin(): void
     {
         $this->travelTo(CarbonImmutable::parse('2026-10-10 00:00:00', 'Asia/Tokyo'));
-        $admin = User::factory()->create(['auth_type' => 1, 'user_type' => 1, 'role_type' => 1])->refresh();
+        $admin = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create(['auth_type' => 1, 'user_type' => 1, 'role_type' => 1])->refresh();
         $id = DB::table('t_shift_requests')->insertGetId([
-            'requested_by' => $admin->id, 'period_start' => '2026-10-12', 'period_end' => '2026-10-12',
+            'store_id' => \Tests\Support\StoreFixtures::storeId(), 'requested_by' => $admin->id, 'period_start' => '2026-10-12', 'period_end' => '2026-10-12',
             'submission_deadline' => '2026-10-09 23:59:59',
         ]);
         $payload = ['shift_request_id' => $id, 'days' => [
@@ -26,7 +26,7 @@ class LateShiftSubmissionTest extends TestCase
         ]];
         foreach ([false, true] as $byAdmin) {
             foreach ([null, 0, 1] as $status) {
-                $cast = User::factory()->create()->refresh();
+                $cast = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create()->refresh();
                 if ($status !== null) {
                     DB::table('t_shifts')->insert([
                         'shift_request_id' => $id, 'user_id' => $cast->id, 'status' => $status,
@@ -58,7 +58,7 @@ class LateShiftSubmissionTest extends TestCase
             }
         }
         DB::table('t_shift_requests')->where('id', $id)->update(['status' => 1]);
-        $cast = User::factory()->create()->refresh();
+        $cast = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create()->refresh();
         $this->actingAs($cast)->getJson('/api/shift-requests/accepting')->assertJsonCount(0, 'data');
         $this->postJson('/api/shifts/draft', $payload)->assertUnprocessable();
         $this->postJson('/api/shifts', $payload)->assertUnprocessable();

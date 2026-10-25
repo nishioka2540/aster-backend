@@ -6,10 +6,21 @@ use App\Domain\ShiftRequest\ShiftRequest;
 use App\Domain\ShiftRequest\ShiftRequestRepository;
 use DateTimeImmutable;
 use DateTimeZone;
+use Enum\LineNotificationKind;
 
+/** 入力DTOから依頼Domainを生成して保存し、必要に応じて通知を登録する。 */
 final readonly class CreateShiftRequestUseCase
 {
-    public function __construct(private ShiftRequestRepository $repository) {}
+    public function __construct(private ShiftRequestRepository $repository, private LineShiftNotifier $notifier) {}
+
+    public function executeWithNotification(CreateShiftRequestDto $dto): array
+    {
+        return $this->repository->transaction(function () use ($dto) {
+            $id = $this->execute($dto);
+
+            return [$id, $this->notifier->enqueue($id, LineNotificationKind::Created)];
+        });
+    }
 
     public function execute(CreateShiftRequestDto $dto): int
     {

@@ -12,9 +12,9 @@ class ShiftScheduleTest extends TestCase
 
     private function fixture(): array
     {
-        $admin = User::factory()->create(['auth_type' => 1, 'user_type' => 1, 'role_type' => 1])->refresh();
-        $cast = User::factory()->create()->refresh();
-        $id = DB::table('t_shift_requests')->insertGetId(['requested_by' => $admin->id,
+        $admin = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create(['auth_type' => 1, 'user_type' => 1, 'role_type' => 1])->refresh();
+        $cast = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create()->refresh();
+        $id = DB::table('t_shift_requests')->insertGetId(['store_id' => \Tests\Support\StoreFixtures::storeId(), 'requested_by' => $admin->id,
             'period_start' => '2026-10-16', 'period_end' => '2026-10-19', 'submission_deadline' => '2026-10-09 23:59:59']);
         $this->submitAvailable($cast, $id);
         return [$admin, $cast, $id, "/api/admin/shift-requests/$id/schedule"];
@@ -105,11 +105,11 @@ class ShiftScheduleTest extends TestCase
     public function test_assignments_only_include_available_submissions_for_the_selected_day(): void
     {
         [$admin, $cast, $id, $url] = $this->fixture();
-        $missing = User::factory()->create();
-        $draft = User::factory()->create();
+        $missing = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create();
+        $draft = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create();
         $draftShift = $this->submitAvailable($draft, $id);
         DB::table('t_shifts')->where('id', $draftShift)->update(['status' => 1]);
-        $unavailable = User::factory()->create();
+        $unavailable = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create();
         $unavailableShift = $this->submitAvailable($unavailable, $id);
         DB::table('t_shift_details')->where('shift_id', $unavailableShift)->where('work_date', '2026-10-16')->update(['availability' => 0]);
         $this->actingAs($admin)->getJson("$url/days/2026-10-16")->assertOk()
@@ -156,7 +156,7 @@ class ShiftScheduleTest extends TestCase
         [$admin, $cast, $id, $url] = $this->fixture();
         $this->actingAs($admin);
         foreach (['2026-10-16', '2026-10-19'] as $date) $this->putJson("$url/days/$date", ['casts' => $this->casts($cast)])->assertOk();
-        $newCast = User::factory()->create();
+        $newCast = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create();
         $this->submitAvailable($newCast, $id);
         $this->getJson($url)->assertJsonPath('days.0.confirmed', false);
         $this->postJson("$url/confirm")->assertUnprocessable();
@@ -173,15 +173,15 @@ class ShiftScheduleTest extends TestCase
         $this->getJson("$url/days/2026-10-16")->assertForbidden();
         $this->putJson("$url/days/2026-10-16", ['casts' => $this->casts($cast)])->assertForbidden();
         $this->postJson("$url/confirm")->assertForbidden();
-        $this->actingAs($admin)->getJson('/api/admin/shift-requests/999/schedule')->assertUnprocessable();
+        $this->actingAs($admin)->getJson('/api/admin/shift-requests/999/schedule')->assertNotFound();
         DB::table('t_shift_requests')->where('id', $id)->update(['deleted_at' => now()]);
-        $this->getJson($url)->assertUnprocessable();
-        $this->putJson("$url/days/2026-10-16", ['casts' => $this->casts($cast)])->assertUnprocessable();
+        $this->getJson($url)->assertNotFound();
+        $this->putJson("$url/days/2026-10-16", ['casts' => $this->casts($cast)])->assertNotFound();
     }
     public function test_cast_sees_only_own_assignments_in_confirmed_periods(): void
     {
         [$admin, $cast, $id, $url] = $this->fixture();
-        $other = User::factory()->create()->refresh();
+        $other = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create()->refresh();
         $this->submitAvailable($other, $id);
         $casts = [...$this->casts($cast), ...$this->casts($other)];
         $casts[1]['start'] = '21:00';
@@ -191,7 +191,7 @@ class ShiftScheduleTest extends TestCase
         $this->actingAs($admin)->postJson("$url/confirm")->assertOk();
         $this->getJson('/api/shifts/confirmed')->assertOk();
         $this->actingAs($cast)->getJson('/api/shifts/confirmed')->assertOk()->assertJsonCount(1, 'data')
-            ->assertJsonCount(2, 'data.0.shifts')->assertJsonPath('data.0.shifts.0.start', '20:00')
+            ->assertJsonCount(2, 'data.0.shifts')->assertJsonPath('data.0.finalized_dates', ['2026-10-16', '2026-10-19'])->assertJsonPath('data.0.shifts.0.start', '20:00')
             ->assertJsonPath('data.0.shifts.0.end', '24:00');
         $this->actingAs($other)->getJson('/api/shifts/confirmed')->assertJsonPath('data.0.shifts.0.start', '21:00');
         DB::table('t_shift_requests')->where('id', $id)->update(['deleted_at' => now()]);
@@ -216,7 +216,7 @@ class ShiftScheduleTest extends TestCase
         $this->getJson($url)->assertJsonPath('days.0.finalized', true)->assertJsonPath('days.1.finalized', false);
         $this->putJson("$url/days/2026-10-16", ['casts' => $this->casts($cast)])->assertOk();
         $this->postJson('/api/shift-requests', $payload)->assertUnprocessable();
-        $this->actingAs($cast)->getJson('/api/shifts/confirmed')->assertJsonCount(1, 'data.0.shifts');
+        $this->actingAs($cast)->getJson('/api/shifts/confirmed')->assertJsonCount(1, 'data.0.shifts')->assertJsonPath('data.0.finalized_dates', ['2026-10-16']);
         $this->actingAs($admin);
         $casts = $this->casts($cast); $casts[0]['work'] = false;
         $this->putJson("$url/days/2026-10-19", ['casts' => $casts])->assertOk();
@@ -230,11 +230,11 @@ class ShiftScheduleTest extends TestCase
     public function test_admin_can_add_unavailable_and_unsubmitted_casts_to_a_finalized_day(): void
     {
         [$admin, $cast, $id, $url] = $this->fixture();
-        $unavailable = User::factory()->create()->refresh();
+        $unavailable = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create()->refresh();
         $shift = $this->submitAvailable($unavailable, $id);
         DB::table('t_shift_details')->where('shift_id', $shift)->update(['availability' => 0]);
-        $missing = User::factory()->create()->refresh();
-        $deleted = User::factory()->create()->refresh();
+        $missing = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create()->refresh();
+        $deleted = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create()->refresh();
         $deleted->delete();
         $this->actingAs($admin);
         $payload = ['casts' => $this->casts($cast)];

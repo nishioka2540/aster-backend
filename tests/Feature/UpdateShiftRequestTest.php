@@ -12,10 +12,10 @@ class UpdateShiftRequestTest extends TestCase
 
     public function test_admin_can_update_all_fields_and_period_changes_require_resubmission_and_replanning(): void
     {
-        $admin = User::factory()->create(['auth_type' => 1, 'user_type' => 1, 'role_type' => 1])->refresh();
-        $cast = User::factory()->create()->refresh();
+        $admin = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create(['auth_type' => 1, 'user_type' => 1, 'role_type' => 1])->refresh();
+        $cast = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create()->refresh();
         $payload = ['period_start' => '2026-10-19', 'period_end' => '2026-10-23', 'submission_deadline' => '2026-10-16 23:59:59', 'notice' => 'Original'];
-        $id = DB::table('t_shift_requests')->insertGetId([...$payload, 'requested_by' => $admin->id]);
+        $id = DB::table('t_shift_requests')->insertGetId([...$payload, 'store_id' => \Tests\Support\StoreFixtures::storeId(), 'requested_by' => $admin->id]);
         $shift = DB::table('t_shifts')->insertGetId(['shift_request_id' => $id, 'user_id' => $cast->id, 'status' => 2, 'submitted_at' => now()]);
         DB::table('t_shift_details')->insert(['shift_id' => $shift, 'work_date' => '2026-10-19', 'availability' => 0]);
         $day = DB::table('t_shift_schedule_days')->insertGetId(['shift_request_id' => $id, 'work_date' => '2026-10-19', 'status' => 2, 'confirmed_by' => $admin->id]);
@@ -32,7 +32,7 @@ class UpdateShiftRequestTest extends TestCase
         $payload['period_start'] = '2026-10-20';
         $payload['period_end'] = '2026-10-26';
         $this->putJson($url, $payload)->assertOk();
-        $this->assertDatabaseHas('t_shift_requests', ['id' => $id, ...$payload, 'requested_by' => $admin->id]);
+        $this->assertDatabaseHas('t_shift_requests', ['id' => $id, ...$payload, 'store_id' => \Tests\Support\StoreFixtures::storeId(), 'requested_by' => $admin->id]);
         $this->assertDatabaseHas('t_shifts', ['id' => $shift, 'status' => 1, 'submitted_at' => null]);
         $this->assertDatabaseHas('t_shift_details', ['shift_id' => $shift, 'deleted_at' => null]);
         $this->assertSoftDeleted('t_shift_schedule_days', ['id' => $day]);

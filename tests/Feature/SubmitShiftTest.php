@@ -13,9 +13,9 @@ class SubmitShiftTest extends TestCase
 
     private function payload(): array
     {
-        $owner = User::factory()->create()->refresh();
+        $owner = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create()->refresh();
         $id = DB::table('t_shift_requests')->insertGetId([
-            'requested_by' => $owner->id, 'period_start' => '2026-10-12',
+            'store_id' => \Tests\Support\StoreFixtures::storeId(), 'requested_by' => $owner->id, 'period_start' => '2026-10-12',
             'period_end' => '2026-10-13', 'submission_deadline' => '2099-10-09 23:59:59',
         ]);
 
@@ -28,7 +28,7 @@ class SubmitShiftTest extends TestCase
     public function test_cast_can_submit_and_resubmit_without_duplicate_rows(): void
     {
         $payload = $this->payload();
-        $cast = User::factory()->create()->refresh();
+        $cast = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create()->refresh();
         $response = $this->actingAs($cast)->postJson('/api/shifts', [...$payload, 'user_id' => 999])->assertOk();
         $this->assertDatabaseHas('t_shifts', ['id' => $response->json('id'), 'user_id' => $cast->id, 'status' => 2]);
         $this->assertDatabaseHas('t_shift_details', ['work_date' => '2026-10-12', 'ends_next_day' => true, 'has_reservation' => true, 'note' => 'ノンアル']);
@@ -43,7 +43,7 @@ class SubmitShiftTest extends TestCase
     public function test_invalid_submissions_do_not_write_any_rows(): void
     {
         $payload = $this->payload();
-        $this->actingAs(User::factory()->create()->refresh());
+        $this->actingAs(User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create()->refresh());
         $invalid = $payload;
         array_pop($invalid['days']);
         $this->postJson('/api/shifts', $invalid)->assertUnprocessable();
@@ -69,13 +69,13 @@ class SubmitShiftTest extends TestCase
     public function test_closed_missing_and_deleted_requests_are_rejected(): void
     {
         $payload = $this->payload();
-        $this->actingAs(User::factory()->create()->refresh());
+        $this->actingAs(User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create()->refresh());
         foreach ([['status' => 1], ['deleted_at' => now()]] as $changes) {
             DB::table('t_shift_requests')->where('id', $payload['shift_request_id'])->update($changes);
-            $this->postJson('/api/shifts', $payload)->assertUnprocessable();
+            $this->postJson('/api/shifts', $payload)->assertStatus(isset($changes['deleted_at']) ? 404 : 422);
         }
         $payload['shift_request_id'] = 999;
-        $this->postJson('/api/shifts', $payload)->assertUnprocessable();
+        $this->postJson('/api/shifts', $payload)->assertNotFound();
         $this->assertDatabaseCount('t_shifts', 0);
     }
 
@@ -83,11 +83,12 @@ class SubmitShiftTest extends TestCase
     {
         $payload = $this->payload();
         $this->postJson('/api/shifts', $payload)->assertUnauthorized();
-        $admin = User::factory()->create()->refresh();
+        $admin = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create()->refresh();
         $admin->user_type = 1;
         $admin->role_type = 1;
         $admin->auth_type = 1;
         $admin->save();
+        \Tests\Support\StoreFixtures::enroll($admin);
         $this->actingAs($admin)->postJson('/api/shifts', $payload)->assertOk();
     }
 }

@@ -2,17 +2,15 @@
 
 namespace App\Http\Controllers\Auth;
 
+use App\Application\Auth\RegisterUserUseCase;
 use App\Http\Controllers\Controller;
 use App\Models\User;
-use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules;
 
 /**
- * ユーザーの新規登録と、登録後のログインを処理する。
+ * ユーザー登録の入力を検証し、ユーザー生成・保存・ログインをUsecaseへ委譲する。
  */
 class RegisteredUserController extends Controller
 {
@@ -21,7 +19,7 @@ class RegisteredUserController extends Controller
      *
      * @throws \Illuminate\Validation\ValidationException
      */
-    public function store(Request $request): Response
+    public function store(Request $request, RegisterUserUseCase $useCase): Response
     {
         $request->validate([
             'name' => ['required', 'string', 'max:255'],
@@ -29,15 +27,7 @@ class RegisteredUserController extends Controller
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
         ]);
 
-        $user = User::create([
-            'name' => $request->name,
-            'email' => $request->email,
-            'password' => Hash::make($request->string('password')),
-        ]);
-
-        event(new Registered($user));
-
-        Auth::login($user);
+        $useCase->execute($request->only('name', 'email', 'password'));
 
         return response()->noContent();
     }

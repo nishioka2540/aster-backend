@@ -12,9 +12,9 @@ class CastSubmissionRulesTest extends TestCase
 
     private function fixture(): array
     {
-        $cast = User::factory()->create()->refresh();
+        $cast = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create()->refresh();
         $id = DB::table('t_shift_requests')->insertGetId([
-            'requested_by' => $cast->id, 'period_start' => '2026-10-12', 'period_end' => '2026-10-13',
+            'store_id' => \Tests\Support\StoreFixtures::storeId(), 'requested_by' => $cast->id, 'period_start' => '2026-10-12', 'period_end' => '2026-10-13',
             'submission_deadline' => '2099-10-09 23:59:59',
         ]);
         $days = array_map(fn ($date) => ['work_date' => $date, 'work' => true, 'start_time' => '20:00',
@@ -66,11 +66,11 @@ class CastSubmissionRulesTest extends TestCase
         $this->getJson('/api/user')->assertJsonPath('home_path', '/my_shifts');
         $response = $this->getJson('/api/shifts/mine')->assertJsonPath('data.0.request.id', $id);
         $this->assertNotNull($response->json('data.0.submitted_at'));
-        $this->actingAs(User::factory()->create()->refresh())->getJson('/api/user')->assertJsonPath('home_path', '/submission');
+        $this->actingAs(User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create()->refresh())->getJson('/api/user')->assertJsonPath('home_path', '/submission');
         $this->actingAs($cast);
         DB::table('t_shift_requests')->where('id', $id)->update(['status' => 1]);
         $this->getJson('/api/user')->assertJsonPath('home_path', '/my_shifts');
-        DB::table('t_shift_requests')->insert(['requested_by' => $cast->id, 'period_start' => '2026-10-19',
+        DB::table('t_shift_requests')->insert(['store_id' => \Tests\Support\StoreFixtures::storeId(), 'requested_by' => $cast->id, 'period_start' => '2026-10-19',
             'period_end' => '2026-10-20', 'submission_deadline' => '2099-10-09 23:59:59']);
         $this->getJson('/api/user')->assertJsonPath('home_path', '/submission');
     }

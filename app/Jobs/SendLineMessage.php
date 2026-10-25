@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\User;
+use Enum\UserType;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Http;
@@ -17,7 +18,7 @@ final class SendLineMessage implements ShouldQueue
 
     public int $createdAt;
 
-    public function __construct(public int $userId, public string $text, public string $retryKey)
+    public function __construct(public int $userId, public string $text, public string $retryKey, public ?int $storeId = null)
     {
         $this->createdAt = time();
     }
@@ -34,7 +35,8 @@ final class SendLineMessage implements ShouldQueue
 
             return;
         }
-        $user = User::where('user_type', User::TYPE_CAST)->find($this->userId);
+        $user = User::find($this->userId);
+        if ($this->storeId === null || ! in_array($this->userId, \App\Services\StoreAccess::castIds($this->storeId), true)) return;
         if (! $user?->line_id) {
             return;
         }

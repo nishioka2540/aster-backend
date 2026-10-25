@@ -4,28 +4,29 @@ namespace App\Services;
 
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
-use OverflowException;
 
 class LoginIdGenerator
 {
-    public function next(int $userType): string
+    public function assign(User $user, int $storeId, int $accessRoleId): string
     {
-        $prefix = match ($userType) {
-            User::TYPE_STAFF => '0101',
-            User::TYPE_CAST => '0102',
-            default => throw new \InvalidArgumentException('Unknown user type.'),
-        };
-
-        return DB::transaction(function () use ($prefix) {
-            DB::table('login_id_sequences')->insertOrIgnore(['prefix' => $prefix, 'last_number' => 0]);
-            $sequence = DB::table('login_id_sequences')->where('prefix', $prefix)->lockForUpdate()->first();
-            $number = $sequence->last_number + 1;
-            if ($number > 26 * 9999) {
-                throw new OverflowException('Login ID sequence exhausted.');
+        return DB::transaction(function () use ($user, $storeId, $accessRoleId) {
+            $saved = User::withTrashed()->whereKey($user->getKey())->lockForUpdate()->firstOrFail();
+            // 最初の所属で一度だけ発行し、再入店や他店舗への所属で変更しない。
+            if ($saved->login_id !== null) {
+                $user->login_id = $saved->login_id;
+                return $saved->login_id;
             }
-            DB::table('login_id_sequences')->where('prefix', $prefix)->update(['last_number' => $number]);
-
-            return $prefix.chr(65 + intdiv($number - 1, 9999)).sprintf('%04d', ($number - 1) % 9999 + 1);
-        }, 5);
+            if (! DB::table('t_store_users')->where('user_id', $user->id)->where('store_id', $storeId)
+                ->where('access_role_id', $accessRoleId)->whereNull('deleted_at')->exists()) {
+                throw new \InvalidArgumentException('An active store membership is required to assign a login ID.');
+            }
+            $loginId = str_pad((string) $storeId, 2, '0', STR_PAD_LEFT)
+                .str_pad((string) $accessRoleId, 2, '0', STR_PAD_LEFT).'A'
+                .str_pad((string) $saved->id, 4, '0', STR_PAD_LEFT);
+            DB::table('mst_users')->where('id', $saved->id)->update(['login_id' => $loginId]);
+            $user->login_id = $loginId;
+            $user->syncOriginalAttribute('login_id');
+            return $loginId;
+        });
     }
 }

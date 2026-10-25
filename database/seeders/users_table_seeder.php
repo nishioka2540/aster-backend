@@ -3,8 +3,12 @@
 namespace Database\Seeders;
 
 use App\Models\User;
-use Illuminate\Support\Facades\Hash;
+use Enum\AuthType;
+use Enum\CastRole;
+use Enum\StaffRole;
+use Enum\UserType;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Hash;
 
 class users_table_seeder extends Seeder
 {
@@ -18,9 +22,9 @@ class users_table_seeder extends Seeder
             [
                 'name' => 'nishioka',
                 'password' => Hash::make('pass'),
-                'auth_type' => 1,
-                'user_type' => 1,
-                'role_type' => 1,
+                'auth_type' => AuthType::Administrator->value,
+                'user_type' => UserType::Staff->value,
+                'role_type' => StaffRole::StoreManager->value,
             ],
         ));
 
@@ -29,9 +33,9 @@ class users_table_seeder extends Seeder
             [
                 'name' => 'Ayana',
                 'password' => Hash::make('pass'),
-                'auth_type' => 0,
-                'user_type' => 2,
-                'role_type' => 3,
+                'auth_type' => AuthType::Standard->value,
+                'user_type' => UserType::Cast->value,
+                'role_type' => CastRole::Other->value,
             ],
         ));
     }

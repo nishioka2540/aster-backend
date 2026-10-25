@@ -11,19 +11,15 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('login_id_sequences', function (Blueprint $table) {
-            $table->string('prefix', 4)->primary();
-            $table->unsignedInteger('last_number')->default(0);
-        });
-
         Schema::create('mst_users', function (Blueprint $table) {
             $table->id();
-            $table->string('login_id', 9)->unique();
+            $table->string('login_id', 64)->nullable()->unique();
             $table->string('name');
             $table->string('email')->nullable()->unique();
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password')->nullable();
             $table->unsignedTinyInteger('auth_type')->default(0);
+            $table->boolean('is_system_admin')->default(false);
             $table->unsignedTinyInteger('user_type')->default(2)->comment('1:黒服 2:キャスト');
             $table->unsignedTinyInteger('role_type')->default(3)->comment('黒服 1:店長 2:Manager 3:チーフ 4:リーダー 5:その他 / キャスト 1:ママ 2:チーママ 3:その他');
             $table->rememberToken();
@@ -53,7 +49,6 @@ return new class extends Migration
     public function down(): void
     {
         Schema::dropIfExists('mst_users');
-        Schema::dropIfExists('login_id_sequences');
         Schema::dropIfExists('password_reset_tokens');
         Schema::dropIfExists('sessions');
     }

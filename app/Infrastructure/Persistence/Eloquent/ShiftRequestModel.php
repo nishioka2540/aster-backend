@@ -13,7 +13,7 @@ class ShiftRequestModel extends Model
     protected $table = 't_shift_requests';
 
     protected $fillable = [
-        'requested_by', 'period_start', 'period_end',
+        'store_id', 'requested_by', 'period_start', 'period_end',
         'submission_deadline', 'notice', 'status',
     ];
 }

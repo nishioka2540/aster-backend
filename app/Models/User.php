@@ -2,9 +2,12 @@
 
 namespace App\Models;
 
+use Enum\AuthType;
+use Enum\CastRole;
+use Enum\UserType;
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -14,32 +17,35 @@ class User extends Authenticatable
     /** @use HasFactory<\Database\Factories\UserFactory> */
     use HasFactory, HasUlids, Notifiable, SoftDeletes;
 
-    protected static function booted(): void
+    /** @deprecated UserType::Staffを使用する。 */
+    public const TYPE_STAFF = UserType::Staff->value;
+
+    /** @deprecated UserType::Castを使用する。 */
+    public const TYPE_CAST = UserType::Cast->value;
+
+    public function isSystemAdministrator(): bool
     {
-        static::creating(function (User $user) {
-            $user->login_id = app(\App\Services\LoginIdGenerator::class)->next((int) $user->user_type);
-        });
+        return $this->is_system_admin;
     }
 
-    public const TYPE_STAFF = 1;
-    public const TYPE_CAST = 2;
+    public function isAdministrator(): bool
+    {
+        return $this->isSystemAdministrator();
+    }
 
     public function canManageShifts(): bool
     {
-        return $this->auth_type === 1
-            || ($this->user_type === self::TYPE_STAFF && in_array($this->role_type, [1, 2], true));
+        return app(\App\Services\StoreAccess::class)->allows($this, 'shift.manage');
     }
 
     public function canRegisterShifts(): bool
     {
-        return $this->auth_type === 1 || $this->user_type === self::TYPE_CAST;
+        return app(\App\Services\StoreAccess::class)->allows($this, 'shift.submit');
     }
 
     public function canViewConfirmedShifts(): bool
     {
-        return $this->canManageShifts()
-            || ($this->user_type === self::TYPE_STAFF && $this->role_type === 4)
-            || ($this->user_type === self::TYPE_CAST && $this->role_type === 1);
+        return app(\App\Services\StoreAccess::class)->allows($this, 'shift_calendar.view');
     }
 
     public function homePath(): string
@@ -47,12 +53,13 @@ class User extends Authenticatable
         if ($this->canManageShifts()) {
             return '/request_shift';
         }
-        if ($this->user_type === self::TYPE_STAFF && $this->canViewConfirmedShifts()) {
+        if (! $this->canRegisterShifts() && $this->canViewConfirmedShifts()) {
             return '/confirmed_shifts';
         }
+
         return $this->canRegisterShifts()
             ? app(\App\Application\Shift\CastHomePath::class)->forUser((int) $this->getAuthIdentifier())
-            : '/access_denied';
+            : '/mypage';
     }
 
     public function uniqueIds(): array
@@ -62,7 +69,7 @@ class User extends Authenticatable
 
     protected $table = 'mst_users';
 
-    protected $attributes = ['auth_type' => 0, 'user_type' => 2, 'role_type' => 3];
+    protected $attributes = ['is_system_admin' => false, 'auth_type' => AuthType::Standard->value, 'user_type' => UserType::Cast->value, 'role_type' => CastRole::Other->value];
 
     /**
      * The attributes that are mass assignable.
@@ -95,6 +102,7 @@ class User extends Authenticatable
     protected function casts(): array
     {
         return [
+            'is_system_admin' => 'boolean',
             'auth_type' => 'integer',
             'user_type' => 'integer',
             'role_type' => 'integer',

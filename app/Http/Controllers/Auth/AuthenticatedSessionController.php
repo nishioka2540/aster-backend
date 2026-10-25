@@ -2,23 +2,25 @@
 
 namespace App\Http\Controllers\Auth;
 
+use App\Application\Auth\AuthenticateSessionUseCase;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-use Illuminate\Support\Facades\Auth;
 
 /**
- * メールアドレスとパスワードによるログインと、ログアウトを受け付ける。
+ * ログインIDによる認証とログアウトを受け付ける。
+ * 入力・試行制限の検証後にUsecaseを呼び出し、HTTPセッションを更新する。
  */
 class AuthenticatedSessionController extends Controller
 {
     /**
      * Handle an incoming authentication request.
      */
-    public function store(LoginRequest $request): Response
+    public function store(LoginRequest $request, AuthenticateSessionUseCase $useCase): Response
     {
-        $request->authenticate();
+        $request->ensureIsNotRateLimited();
+        $useCase->login($request->only('login_id', 'password'), $request->boolean('remember'), $request->throttleKey());
 
         $request->session()->regenerate();
 
@@ -28,9 +30,9 @@ class AuthenticatedSessionController extends Controller
     /**
      * Destroy an authenticated session.
      */
-    public function destroy(Request $request): Response
+    public function destroy(Request $request, AuthenticateSessionUseCase $useCase): Response
     {
-        Auth::guard('web')->logout();
+        $useCase->logout();
 
         $request->session()->invalidate();
 

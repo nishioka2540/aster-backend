@@ -8,12 +8,20 @@ use DomainException;
 /** 新規シフト依頼。業務上の制約をHTTP・DBから独立して保証する。 */
 final readonly class ShiftRequest
 {
-
     public static function assertCanCreate(bool $hasUnconfirmedRequest): void
     {
         if ($hasUnconfirmedRequest) {
             throw new DomainException('未確定のシフトがあるため、新規の提出依頼は作成できません。');
         }
+    }
+
+    public function revise(DateTimeImmutable $start, DateTimeImmutable $end, DateTimeImmutable $deadline, ?string $notice): self
+    {
+        if ($this->status !== ShiftRequestStatus::Unconfirmed) {
+            throw new DomainException('確定済みの提出依頼は修正できません。');
+        }
+
+        return new self($this->requestedBy, $start, $end, $deadline, $notice, $this->status);
     }
 
     public function __construct(

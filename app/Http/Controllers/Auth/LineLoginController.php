@@ -2,26 +2,47 @@
 
 namespace App\Http\Controllers\Auth;
 
+use App\Application\Auth\LineLoginUseCase;
 use App\Http\Controllers\Controller;
-use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 
 /**
- * LINEログインの認証開始とコールバックの検証を行い、ユーザーのログインを処理する。
+ * LINEログインを開始し、コールバックのstate・有効期限を検証する。
+ * トークン検証・ユーザー保存・ログインをUsecaseへ委譲し、セッションを更新する。
  */
 class LineLoginController extends Controller
 {
+    public function link(Request $request): \Illuminate\Http\JsonResponse
+    {
+        abort_if(! config('services.line.client_id') || ! config('services.line.client_secret'), 503,
+            'LINE連携の設定がまだ完了していません。管理者にお問い合わせください。');
+        abort_if((bool) $request->user()->line_id, 409, 'すでにLINE連携済みです。');
+        $redirect = $this->redirect($request);
+        $attempt = $request->session()->get('line_login');
+        $attempt['link_user_id'] = $request->user()->getAuthIdentifier();
+        $request->session()->put('line_login', $attempt);
+
+        return response()->json(['url' => $redirect->getTargetUrl()]);
+    }
+
     /**
      * 認証に必要な一時情報をセッションに保存し、LINEの認証画面へ移動する。
      */
     public function redirect(Request $request): RedirectResponse
     {
+        $invitation = null;
+        if ($request->isMethod('GET') && ($request->has('store') || $request->has('invite'))) {
+            try {
+                app(\App\Application\CastManagement\CastInvitationService::class)->resolve($request->query('store'), $request->query('invite'));
+                $invitation = ['store' => $request->query('store'), 'invite' => $request->query('invite')];
+            } catch (\App\Application\CastManagement\CastInvitationException $exception) {
+                return $this->failure($exception->getMessage());
+            }
+        }
         if (! config('services.line.client_id') || ! config('services.line.client_secret')) {
-            return $this->failure('not_configured');
+            return $this->failure('not_configured', false, $invitation);
         }
 
         // stateは認証リクエストとコールバックの照合、nonceはIDトークンの照合に使う。
@@ -32,6 +53,7 @@ class LineLoginController extends Controller
         $request->session()->put('line_login', [
             'state' => $state, 'nonce' => $nonce, 'verifier' => $verifier,
             'expires_at' => now()->addMinutes(10)->timestamp,
+            'invitation' => $invitation,
         ]);
 
         return redirect()->away('https://access.line.me/oauth2/v2.1/authorize?'.http_build_query([
@@ -40,6 +62,7 @@ class LineLoginController extends Controller
             'redirect_uri' => config('services.line.redirect_uri'),
             'state' => $state,
             'scope' => 'openid profile',
+            'bot_prompt' => 'aggressive',
             'nonce' => $nonce,
             // verifier自体は渡さず、SHA-256をBase64URL形式にした値をLINEへ渡す。
             'code_challenge' => rtrim(strtr(base64_encode(hash('sha256', $verifier, true)), '+/', '-_'), '='),
@@ -50,72 +73,63 @@ class LineLoginController extends Controller
     /**
      * LINEからの応答を検証し、対応するユーザーでログインする。
      */
-    public function callback(Request $request): RedirectResponse
+    public function callback(Request $request, LineLoginUseCase $useCase): RedirectResponse
     {
         // pullで一時情報を取り出すと同時に削除し、同じ認証試行の再利用を防ぐ。
         $attempt = $request->session()->pull('line_login');
+        $linking = is_array($attempt) && isset($attempt['link_user_id']);
+        $invitation = is_array($attempt) && ! $linking ? ($attempt['invitation'] ?? null) : null;
         $state = $request->query('state');
         // セッションに紐づくstateと有効期限を確認してから、LINEの応答を処理する。
         if (! is_array($attempt) || ! is_string($state)
             || ! hash_equals($attempt['state'], $state)
             || $attempt['expires_at'] < now()->timestamp) {
-            return $this->failure('invalid_state');
+            return $this->failure('invalid_state', $linking, $invitation);
+        }
+        if ($linking && (! $request->user() || (string) $request->user()->getAuthIdentifier() !== (string) $attempt['link_user_id'])) {
+            return $this->failure('session_changed', true);
         }
         if ($request->query('error')) {
-            return $this->failure('cancelled');
+            return $this->failure('cancelled', $linking, $invitation);
         }
         $code = $request->query('code');
         if (! is_string($code) || $code === '') {
-            return $this->failure('failed');
+            return $this->failure('failed', $linking, $invitation);
         }
 
         try {
-            // 認可コードをトークンに交換する。PKCEのverifierもここで照合される。
-            $tokens = Http::asForm()->timeout(15)->post('https://api.line.me/oauth2/v2.1/token', [
-                'grant_type' => 'authorization_code',
-                'code' => $code,
-                'redirect_uri' => config('services.line.redirect_uri'),
-                'client_id' => config('services.line.client_id'),
-                'client_secret' => config('services.line.client_secret'),
-                'code_verifier' => $attempt['verifier'],
-            ]);
-            if (! $tokens->successful() || ! is_string($tokens->json('id_token'))) {
-                return $this->failure('failed');
+            $user = $useCase->execute($code, $attempt['verifier'], $attempt['nonce'], $linking ? $request->user() : null, $invitation);
+        } catch (\App\Application\CastManagement\CastInvitationException $exception) {
+            return $this->failure($exception->getMessage(), false, $invitation);
+        } catch (\Illuminate\Database\UniqueConstraintViolationException $exception) {
+            if ($invitation) return $this->failure('failed', false, $invitation);
+            if (! $linking) {
+                throw $exception;
             }
-            // IDトークンをLINE側で検証し、client_idとnonceが一致する本人情報を取得する。
-            $verified = Http::asForm()->timeout(15)->post('https://api.line.me/oauth2/v2.1/verify', [
-                'id_token' => $tokens->json('id_token'),
-                'client_id' => config('services.line.client_id'),
-                'nonce' => $attempt['nonce'],
-            ]);
-            if (! $verified->successful() || ! is_string($verified->json('sub')) || $verified->json('sub') === '') {
-                return $this->failure('failed');
-            }
-        } catch (\Illuminate\Http\Client\ConnectionException $exception) {
-            return $this->failure('failed');
+            return $this->failure('already_linked', true);
         }
-
-        // 検証済みのLINEユーザーID（sub）だけで照合し、表示名やメールでは紐づけない。
-        $user = User::firstOrCreate(['line_id' => $verified->json('sub')], [
-            'name' => $verified->json('name') ?: 'LINEユーザー',
-        ]);
-        // 再ログイン時にも、LINE側の最新の表示名とプロフィール画像を反映する。
-        $user->update([
-            'name' => $verified->json('name') ?: $user->name,
-            'line_picture_url' => $verified->json('picture'),
-        ]);
-        Auth::guard('web')->login($user);
+        if (! $user) {
+            return $this->failure('failed', $linking, $invitation);
+        }
+        if ($linking) {
+            \Illuminate\Support\Facades\Auth::guard('web')->setUser($user);
+        }
         // ログイン前のセッションIDを更新し、セッション固定攻撃を防ぐ。
+        if (! $linking) $request->session()->forget('active_store_id');
+        if ($invitation) {
+            $request->session()->put('active_store_id', (int) \Illuminate\Support\Facades\DB::table('t_store')->where('ulid', $invitation['store'])->value('id'));
+        }
         $request->session()->regenerate();
 
-        return redirect()->away(rtrim(config('services.line.frontend_url'), '/').$user->homePath());
+        return redirect()->away(rtrim(config('services.line.frontend_url'), '/').($linking ? '/mypage?line=linked' : ($invitation ? '/mypage?enrollment=registered' : $user->homePath())));
     }
 
     /**
      * フロントエンドのログイン画面へ、表示用のエラー理由を渡す。
      */
-    private function failure(string $reason): RedirectResponse
+    private function failure(string $reason, bool $linking = false, ?array $invitation = null): RedirectResponse
     {
-        return redirect()->away(rtrim(config('services.line.frontend_url'), '/').'/login?error='.$reason);
+        $params = $linking ? ['line' => $reason] : ['error' => $reason, ...($invitation ?? [])];
+        return redirect()->away(rtrim(config('services.line.frontend_url'), '/').($linking ? '/mypage?' : '/login?').http_build_query($params, '', '&', PHP_QUERY_RFC3986));
     }
 }

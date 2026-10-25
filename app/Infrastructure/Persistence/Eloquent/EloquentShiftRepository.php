@@ -2,17 +2,17 @@
 
 namespace App\Infrastructure\Persistence\Eloquent;
 
+use App\Application\ShiftRequest\ShiftRequestAvailabilityQueryService;
 use App\Domain\Shift\Shift;
 use App\Domain\Shift\ShiftRepository;
+use App\Domain\ShiftRequest\ShiftRequestStatus;
+use Enum\ShiftScheduleDayStatus;
 use Enum\ShiftStatus;
 use Illuminate\Support\Facades\DB;
-use App\Application\ShiftRequest\ShiftRequestAvailabilityQueryService;
 
 final class EloquentShiftRepository implements ShiftRepository
 {
-    public function __construct(private readonly ShiftRequestAvailabilityQueryService $availability)
-    {
-    }
+    public function __construct(private readonly ShiftRequestAvailabilityQueryService $availability) {}
 
     public function transaction(callable $operation): int
     {
@@ -21,14 +21,14 @@ final class EloquentShiftRepository implements ShiftRepository
 
     public function findRequestForUpdate(int $requestId, int $userId): ?array
     {
-        $request = DB::table('t_shift_requests')->where('id', $requestId)->whereNull('deleted_at')->lockForUpdate()->first();
+        $request = DB::table('t_shift_requests')->where('store_id', \App\Services\StoreAccess::storeId())->where('id', $requestId)->whereNull('deleted_at')->lockForUpdate()->first();
 
         return $request ? [
             'period_start' => $request->period_start,
             'period_end' => $request->period_end,
             'submission_deadline' => $request->submission_deadline,
-            'open' => (int) $request->status === 0,
-            'finalized_dates' => DB::table('t_shift_schedule_days')->where('shift_request_id', $requestId)->where('status', 2)->whereNull('deleted_at')->pluck('work_date')->all(),
+            'open' => (int) $request->status === ShiftRequestStatus::Unconfirmed->value,
+            'finalized_dates' => DB::table('t_shift_schedule_days')->where('shift_request_id', $requestId)->where('status', ShiftScheduleDayStatus::Finalized->value)->whereNull('deleted_at')->pluck('work_date')->all(),
             'accepting' => $this->availability->isAccepting($requestId, $userId),
         ] : null;
     }
@@ -49,7 +49,7 @@ final class EloquentShiftRepository implements ShiftRepository
         } else {
             $id = DB::table('t_shifts')->insertGetId([...$attributes, 'shift_request_id' => $requestId, 'user_id' => $userId, 'created_at' => $now]);
         }
-        $finalized = DB::table('t_shift_schedule_days')->where('shift_request_id', $requestId)->where('status', 2)->whereNull('deleted_at')->pluck('work_date')->all();
+        $finalized = DB::table('t_shift_schedule_days')->where('shift_request_id', $requestId)->where('status', ShiftScheduleDayStatus::Finalized->value)->whereNull('deleted_at')->pluck('work_date')->all();
         DB::table('t_shift_details')->where('shift_id', $id)->whereNotIn('work_date', $finalized)
             ->whereNotIn('work_date', array_column($shift->days, 'work_date'))->update(['deleted_at' => $now, 'updated_at' => $now]);
         foreach ($shift->days as $day) {

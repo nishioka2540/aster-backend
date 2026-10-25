@@ -17,10 +17,16 @@ class DummyCastSeeder extends Seeder
                 continue;
             }
 
-            User::factory()->cast()->create([
+            $user = User::factory()->cast()->create([
                 'name' => sprintf('テストキャスト%02d', $i),
                 'email' => $email,
             ]);
+            $storeId = \Illuminate\Support\Facades\DB::table('t_store')->where('ulid', NishiyamaStoreSeeder::STORE_ULID)->sole()->id;
+            $accessId = \Illuminate\Support\Facades\DB::table('mst_access_roles')->where('code', 'cast')->sole()->id;
+            \Illuminate\Support\Facades\DB::table('t_store_users')->insert([
+                'store_id' => $storeId, 'user_id' => $user->id, 'user_type' => 2, 'access_role_id' => $accessId, 'role_id' => null,
+            ]);
+            app(\App\Services\LoginIdGenerator::class)->assign($user, (int) $storeId, (int) $accessId);
         }
     }
 }
