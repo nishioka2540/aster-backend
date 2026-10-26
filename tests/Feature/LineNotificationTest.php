@@ -32,17 +32,16 @@ class LineNotificationTest extends TestCase
         $this->travelTo(now()->setDate(2026, 10, 19));
         Cache::flush();
         $this->admin = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create();
-        $this->admin->forceFill(['auth_type' => 1, 'user_type' => 1, 'role_type' => 1])->save();
-        \Tests\Support\StoreFixtures::enroll($this->admin);
+        \Tests\Support\StoreFixtures::enroll($this->admin, 1, 1, 1);
         Queue::fake();
         Http::preventStrayRequests();
     }
 
     public function test_creation_and_update_notify_only_active_linked_casts(): void
     {
-        $cast = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create(['line_id' => 'Ucast']);
+        $cast = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member, 2, 3, 0))->create(['line_id' => 'Ucast']);
         User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create();
-        User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create(['line_id' => 'Udeleted'])->delete();
+        User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member, 2, 3, 0))->create(['line_id' => 'Udeleted'])->delete();
         $id = $this->createRequest();
         Queue::assertPushed(SendLineMessage::class, fn ($job) => $job->userId === $cast->id && str_contains($job->text, 'シフト提出のお願い'));
         Queue::assertPushed(SendLineMessage::class, 1);
@@ -55,8 +54,8 @@ class LineNotificationTest extends TestCase
 
     public function test_reminder_excludes_submitted_cast_and_rejects_repeat_and_cast(): void
     {
-        $submitted = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create(['line_id' => 'Usubmitted']);
-        $unsubmitted = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create(['line_id' => 'Uunsubmitted']);
+        $submitted = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member, 2, 3, 0))->create(['line_id' => 'Usubmitted']);
+        $unsubmitted = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member, 2, 3, 0))->create(['line_id' => 'Uunsubmitted']);
         $id = $this->createRequest();
         DB::table('t_shifts')->insert(['user_id' => $submitted->id, 'shift_request_id' => $id, 'status' => 2, 'created_at' => now(), 'updated_at' => now()]);
         Queue::fake();
@@ -71,7 +70,7 @@ class LineNotificationTest extends TestCase
 
     public function test_reminder_is_available_only_from_day_after_deadline_in_japan(): void
     {
-        User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create(['line_id' => 'Ucast']);
+        User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member, 2, 3, 0))->create(['line_id' => 'Ucast']);
         $id = $this->createRequest();
         Queue::fake();
         $url = '/api/admin/shift-requests/'.$id.'/remind';
@@ -94,7 +93,7 @@ class LineNotificationTest extends TestCase
 
     public function test_job_sends_with_stable_retry_key_and_retries_server_errors(): void
     {
-        $cast = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create(['line_id' => 'Ucast']);
+        $cast = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member, 2, 3, 0))->create(['line_id' => 'Ucast']);
         Http::fake(['api.line.me/*' => Http::sequence()->push([], 500)->push([], 200)]);
         $job = new SendLineMessage($cast->id, '通知', '123e4567-e89b-12d3-a456-426614174000', \Tests\Support\StoreFixtures::storeId());
         try {
@@ -110,7 +109,7 @@ class LineNotificationTest extends TestCase
 
     public function test_partial_confirmation_respects_notification_option(): void
     {
-        User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create(['line_id' => 'Ucast']);
+        User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member, 2, 3, 0))->create(['line_id' => 'Ucast']);
         $id = $this->createRequest();
         Queue::fake();
         $url = '/api/admin/shift-requests/'.$id.'/schedule';
@@ -131,14 +130,14 @@ class LineNotificationTest extends TestCase
         // Restore the real queue manager after Queue::fake().
         app()->forgetInstance('queue');
         Queue::clearResolvedInstance('queue');
-        User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create(['line_id' => 'Ucast']);
+        User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member, 2, 3, 0))->create(['line_id' => 'Ucast']);
         $this->createRequest();
         $this->assertDatabaseHas('jobs', ['queue' => 'line-notifications']);
     }
 
     public function test_queue_failure_rolls_back_the_saved_request(): void
     {
-        User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create(['line_id' => 'Ucast']);
+        User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member, 2, 3, 0))->create(['line_id' => 'Ucast']);
         Queue::shouldReceive('connection')->andThrow(new \RuntimeException('queue unavailable'));
         $this->withoutExceptionHandling();
         try {

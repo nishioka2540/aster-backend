@@ -252,7 +252,7 @@ class CastInvitationTest extends TestCase
 
     public function test_existing_line_user_keeps_other_store_memberships_and_system_privilege_is_not_promoted(): void
     {
-        $user = User::factory()->create(['line_id' => 'Uexisting', 'user_type' => 1]);
+        $user = User::factory()->create(['line_id' => 'Uexisting']);
         $other = DB::table('t_store')->insertGetId(['ulid' => (string) Str::ulid(), 'organization_id' => $this->store->organization_id, 'name' => '他店舗']);
         $access = DB::table('mst_access_roles')->where('code', 'staff')->sole()->id;
         $membership = DB::table('t_store_users')->insertGetId(['store_id' => $other, 'user_id' => $user->id, 'user_type' => 1, 'access_role_id' => $access]);

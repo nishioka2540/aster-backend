@@ -12,7 +12,7 @@ class ShiftScheduleTest extends TestCase
 
     private function fixture(): array
     {
-        $admin = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create(['auth_type' => 1, 'user_type' => 1, 'role_type' => 1])->refresh();
+        $admin = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member, 1, 1, 1))->create([])->refresh();
         $cast = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create()->refresh();
         $id = DB::table('t_shift_requests')->insertGetId(['store_id' => \Tests\Support\StoreFixtures::storeId(), 'requested_by' => $admin->id,
             'period_start' => '2026-10-16', 'period_end' => '2026-10-19', 'submission_deadline' => '2026-10-09 23:59:59']);
@@ -34,6 +34,33 @@ class ShiftScheduleTest extends TestCase
     private function casts(User $cast): array
     {
         return [['id' => $cast->ulid, 'work' => true, 'start' => '20:00', 'end' => '24:00', 'reserved' => true, 'note' => '予約']];
+    }
+
+    public function test_required_count_is_saved_per_day_and_restored_in_review(): void
+    {
+        [$admin, $cast, $id, $url] = $this->fixture();
+        $this->actingAs($admin);
+        $this->getJson("$url/days/2026-10-16")->assertOk()->assertJsonPath('required_count', 0);
+        $this->putJson("$url/days/2026-10-16", ['casts' => $this->casts($cast), 'required_count' => 4])->assertOk();
+        $this->getJson("$url/days/2026-10-16")->assertOk()->assertJsonPath('required_count', 4);
+        $this->getJson($url)->assertOk()->assertJsonPath('days.0.required_count', 4)->assertJsonPath('days.0.count', 1)
+            ->assertJsonPath('days.1.required_count', 0);
+        // Older callers can omit the field without resetting a saved target.
+        $this->putJson("$url/days/2026-10-16", ['casts' => $this->casts($cast)])->assertOk();
+        $this->getJson("$url/days/2026-10-16")->assertOk()->assertJsonPath('required_count', 4);
+        $this->putJson("$url/days/2026-10-16", ['casts' => $this->casts($cast), 'required_count' => 0])->assertOk();
+        $this->assertDatabaseHas('t_shift_schedule_days', ['shift_request_id' => $id, 'work_date' => '2026-10-16', 'required_count' => 0]);
+    }
+
+    public function test_invalid_required_counts_do_not_save_the_day(): void
+    {
+        [$admin, $cast, $id, $url] = $this->fixture();
+        $this->actingAs($admin);
+        foreach ([-1, 1.5, 'abc', null, 65536] as $count) {
+            $this->putJson("$url/days/2026-10-16", ['casts' => $this->casts($cast), 'required_count' => $count])
+                ->assertUnprocessable()->assertJsonValidationErrors('required_count');
+        }
+        $this->assertDatabaseCount('t_shift_schedule_days', 0);
     }
 
     public function test_confirmation_is_blocked_through_deadline_day_and_allowed_from_next_day(): void
@@ -134,7 +161,7 @@ class ShiftScheduleTest extends TestCase
         foreach (['2026-10-17', '2026-10-15', '2026-10-20', '2026-02-30', 'invalid'] as $date) {
             $this->putJson("$url/days/$date", ['casts' => $this->casts($cast)])->assertUnprocessable();
         }
-        foreach (['19:45', '20:01', '22:15', '24:00'] as $start) {
+        foreach (['19:45', '20:60', '22:15', '24:00'] as $start) {
             $casts = $this->casts($cast); $casts[0]['start'] = $start;
             $this->putJson("$url/days/2026-10-16", ['casts' => $casts])->assertUnprocessable();
         }

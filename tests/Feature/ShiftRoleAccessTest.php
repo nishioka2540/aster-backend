@@ -26,7 +26,7 @@ class ShiftRoleAccessTest extends TestCase
             [1, 5, 2, true, true],
             [2, 3, 2, true, true],
         ] as [$type, $role, $admin, $manage, $register]) {
-            $user = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create(['user_type' => $type, 'role_type' => $role, 'auth_type' => $admin === 2 ? 0 : $admin, 'is_system_admin' => $admin === 2]);
+            $user = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member, $type, $role, $admin === 2 ? 0 : $admin))->create(['is_system_admin' => $admin === 2]);
             $this->actingAs($user);
             $this->getJson('/api/shifts/status')->assertStatus($manage ? 200 : 403);
             $this->getJson('/api/shift-requests/defaults')->assertStatus($manage ? 200 : 403);
@@ -39,23 +39,23 @@ class ShiftRoleAccessTest extends TestCase
         }
     }
 
-    public function test_new_users_default_to_cast_and_cannot_mass_assign_privileges(): void
+    public function test_new_users_cannot_mass_assign_removed_privileges(): void
     {
         $user = User::create(['name' => 'Cast', 'user_type' => 1, 'role_type' => 1, 'auth_type' => 1]);
         $user->refresh();
-        $this->assertSame(2, $user->user_type);
-        $this->assertSame(3, $user->role_type);
-        $this->assertSame(0, $user->auth_type);
+        $this->assertArrayNotHasKey('user_type', $user->getAttributes());
+        $this->assertArrayNotHasKey('role_type', $user->getAttributes());
+        $this->assertArrayNotHasKey('auth_type', $user->getAttributes());
     }
 
     public function test_system_administrator_is_distinct_and_cannot_be_mass_assigned(): void
     {
-        $user = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create(['is_system_admin' => true]);
+        $user = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member, 2, 3, 0))->create(['is_system_admin' => true]);
         $this->assertTrue($user->fresh()->isSystemAdministrator());
         $this->assertTrue($user->fresh()->isAdministrator());
         $this->actingAs($user)->getJson('/api/user')->assertOk()->assertJsonPath('is_system_admin', true);
 
-        $admin = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create(['auth_type' => 1]);
+        $admin = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member, 2, 3, 1))->create([]);
         $this->assertFalse($admin->isAdministrator());
         $this->assertFalse($admin->isSystemAdministrator());
 

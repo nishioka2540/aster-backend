@@ -2,8 +2,6 @@
 
 namespace App\Models;
 
-use Enum\AuthType;
-use Enum\CastRole;
 use Enum\UserType;
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
@@ -69,7 +67,7 @@ class User extends Authenticatable
 
     protected $table = 'mst_users';
 
-    protected $attributes = ['is_system_admin' => false, 'auth_type' => AuthType::Standard->value, 'user_type' => UserType::Cast->value, 'role_type' => CastRole::Other->value];
+    protected $attributes = ['is_system_admin' => false];
 
     /**
      * The attributes that are mass assignable.
@@ -103,9 +101,6 @@ class User extends Authenticatable
     {
         return [
             'is_system_admin' => 'boolean',
-            'auth_type' => 'integer',
-            'user_type' => 'integer',
-            'role_type' => 'integer',
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
         ];

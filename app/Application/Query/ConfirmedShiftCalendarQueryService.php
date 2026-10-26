@@ -19,7 +19,7 @@ final class ConfirmedShiftCalendarQueryService
             'to_date' => $to->toDateString(),
         ];
         $days = collect(DB::select(<<<'SQL'
-            SELECT day.id, day.work_date, day.shift_request_id
+            SELECT day.id, day.work_date, day.shift_request_id, day.required_count
             FROM t_shift_schedule_days day
             INNER JOIN t_shift_requests request ON request.id = day.shift_request_id
             WHERE request.store_id = :store_id AND day.status = :finalized_status
@@ -51,7 +51,7 @@ final class ConfirmedShiftCalendarQueryService
                     'end' => $cast->ends_next_day ? '24:00' : substr($cast->end_time, 0, 5),
                 ])->all();
             $result[] = ['date' => $date->toDateString(), 'confirmed' => $dateDays->isNotEmpty(),
-                'count' => count($members), 'casts' => $members,
+                'count' => count($members), 'required_count' => (int) $dateDays->sum('required_count'), 'casts' => $members,
                 ...($includeRequestIds ? ['request_ids' => $dateDays->pluck('shift_request_id')->unique()->values()->all()] : [])];
         }
 

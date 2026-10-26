@@ -91,7 +91,7 @@ final class EloquentShiftScheduleRepository implements ShiftScheduleRepository
     {
         $rows = DB::table('t_shift_schedule_days as day')
             ->where('day.shift_request_id', $requestId)->whereNull('day.deleted_at')
-            ->select('day.id', 'day.work_date', 'day.status')->get();
+            ->select('day.id', 'day.work_date', 'day.status', 'day.required_count')->get();
         $result = [];
         foreach ($rows as $day) {
             $count = DB::table('t_shift_assignments as assignment')->join('mst_users as cast', 'cast.id', '=', 'assignment.user_id')
@@ -101,7 +101,7 @@ final class EloquentShiftScheduleRepository implements ShiftScheduleRepository
                 ->where('assignment.shift_schedule_day_id', $day->id)->whereNull('assignment.deleted_at')
                 ->whereNull('cast.deleted_at')->whereIn('cast.id', \App\Services\StoreAccess::castIds())->orderBy('cast.id')
                 ->pluck('cast.id')->map(fn ($id) => (int) $id)->all();
-            $result[$day->work_date] = ['finalized' => (int) $day->status === ShiftScheduleDayStatus::Finalized->value, 'confirmed' => (int) $day->status >= ShiftScheduleDayStatus::Decided->value && $savedIds === $this->castIds($requestId, $day->work_date), 'count' => $count];
+            $result[$day->work_date] = ['finalized' => (int) $day->status === ShiftScheduleDayStatus::Finalized->value, 'confirmed' => (int) $day->status >= ShiftScheduleDayStatus::Decided->value && $savedIds === $this->castIds($requestId, $day->work_date), 'count' => $count, 'required_count' => (int) $day->required_count];
         }
 
         return $result;
@@ -128,12 +128,13 @@ final class EloquentShiftScheduleRepository implements ShiftScheduleRepository
         })->all();
     }
 
-    public function saveDay(int $requestId, string $date, array $casts, int $adminId): void
+    public function saveDay(int $requestId, string $date, array $casts, int $adminId, ?int $requiredCount = null): void
     {
         $now = CarbonImmutable::now('Asia/Tokyo');
         $key = ['shift_request_id' => $requestId, 'work_date' => $date];
         $existing = DB::table('t_shift_schedule_days')->where($key)->first();
         $attributes = ['status' => $existing && (int) $existing->status === ShiftScheduleDayStatus::Finalized->value ? ShiftScheduleDayStatus::Finalized->value : ShiftScheduleDayStatus::Decided->value, 'decided_by' => $adminId, 'decided_at' => $now, 'deleted_at' => null, 'updated_at' => $now];
+        $attributes['required_count'] = $requiredCount ?? (int) ($existing->required_count ?? 0);
         if ($existing) {
             $dayId = (int) $existing->id;
             DB::table('t_shift_schedule_days')->where('id', $dayId)->update($attributes);

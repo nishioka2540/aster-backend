@@ -16,7 +16,7 @@ class LateShiftSubmissionTest extends TestCase
     public function test_unsubmitted_casts_can_save_and_submit_after_deadline_including_by_admin(): void
     {
         $this->travelTo(CarbonImmutable::parse('2026-10-10 00:00:00', 'Asia/Tokyo'));
-        $admin = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create(['auth_type' => 1, 'user_type' => 1, 'role_type' => 1])->refresh();
+        $admin = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member, 1, 1, 1))->create([])->refresh();
         $id = DB::table('t_shift_requests')->insertGetId([
             'store_id' => \Tests\Support\StoreFixtures::storeId(), 'requested_by' => $admin->id, 'period_start' => '2026-10-12', 'period_end' => '2026-10-12',
             'submission_deadline' => '2026-10-09 23:59:59',

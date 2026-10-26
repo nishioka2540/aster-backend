@@ -10,7 +10,7 @@ class UserSchemaTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_user_can_have_nullable_credentials_and_defaults_to_cast_role(): void
+    public function test_user_can_have_nullable_credentials_without_legacy_columns(): void
     {
         $user = User::create(['name' => 'Cast']);
 
@@ -18,12 +18,9 @@ class UserSchemaTest extends TestCase
 
         $this->assertNull($user->email);
         $this->assertNull($user->password);
-        $this->assertSame(0, $user->auth_type);
-
-        $user->auth_type = 1;
-        $user->save();
-
-        $this->assertSame(1, $user->fresh()->auth_type);
+        foreach (['auth_type', 'user_type', 'role_type'] as $column) {
+            $this->assertFalse(\Illuminate\Support\Facades\Schema::hasColumn('mst_users', $column));
+        }
     }
 
     public function test_ulids_are_unique_and_stable_without_changing_internal_ids(): void
@@ -54,10 +51,10 @@ class UserSchemaTest extends TestCase
 
     public function test_login_ids_use_actual_user_id_and_access_role_and_remain_stable(): void
     {
-        $staff = User::factory()->create(['user_type' => User::TYPE_STAFF]);
+        $staff = User::factory()->create();
         $cast = User::factory()->create();
         $this->assertNull($cast->login_id);
-        \Tests\Support\StoreFixtures::enroll($staff);
+        \Tests\Support\StoreFixtures::enroll($staff, 1);
         \Tests\Support\StoreFixtures::enroll($cast);
         $this->assertSame('0102A0001', $staff->login_id);
         $this->assertSame('0101A0002', $cast->login_id);

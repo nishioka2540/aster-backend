@@ -23,9 +23,7 @@ class ReceiveShiftRequestTest extends TestCase
     private function admin(): User
     {
         $user = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create();
-        $user->auth_type = 1;
-        $user->save();
-        \Tests\Support\StoreFixtures::enroll($user);
+        \Tests\Support\StoreFixtures::enroll($user, 2, 3, 1);
         return $user;
     }
 

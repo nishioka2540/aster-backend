@@ -16,11 +16,7 @@ class ShiftDraftTest extends TestCase
     {
         $cast = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create()->refresh();
         $admin = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create()->refresh();
-        $admin->user_type = 1;
-        $admin->role_type = 1;
-        $admin->auth_type = 1;
-        $admin->save();
-        \Tests\Support\StoreFixtures::enroll($admin);
+        \Tests\Support\StoreFixtures::enroll($admin, 1, 1, 1);
         $id = DB::table('t_shift_requests')->insertGetId([
             'store_id' => \Tests\Support\StoreFixtures::storeId(), 'requested_by' => $admin->id, 'period_start' => '2026-10-12', 'period_end' => '2026-10-13',
             'submission_deadline' => '2099-10-09 23:59:59',

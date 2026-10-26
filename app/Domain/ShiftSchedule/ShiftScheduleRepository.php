@@ -10,6 +10,6 @@ interface ShiftScheduleRepository
     public function allCastIds(): array;
     public function days(int $requestId): array;
     public function assignments(int $requestId, string $date): array;
-    public function saveDay(int $requestId, string $date, array $casts, int $adminId): void;
+    public function saveDay(int $requestId, string $date, array $casts, int $adminId, ?int $requiredCount = null): void;
     public function confirm(int $requestId, int $adminId, array $dates, bool $complete): void;
 }

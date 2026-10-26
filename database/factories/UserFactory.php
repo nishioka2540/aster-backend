@@ -2,7 +2,6 @@
 
 namespace Database\Factories;
 
-use Enum\AuthType;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -46,7 +45,6 @@ class UserFactory extends Factory
     public function cast(): static
     {
         return $this->state(fn (array $attributes) => [
-            'auth_type' => AuthType::Standard->value,
         ]);
     }
 }

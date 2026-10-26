@@ -14,13 +14,9 @@ class GetShiftStatusTest extends TestCase
     public function test_status_includes_missing_draft_and_deleted_shifts_per_accepting_request(): void
     {
         $admin = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create()->refresh();
-        $admin->user_type = 1;
-        $admin->role_type = 1;
-        $admin->auth_type = 1;
-        $admin->save();
-        \Tests\Support\StoreFixtures::enroll($admin);
+        \Tests\Support\StoreFixtures::enroll($admin, 1, 1, 1);
         $casts = collect(['未登録', '未着手', '下書き', '提出済み', '削除シフト', '削除ユーザー'])
-            ->map(fn ($name) => User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create(['name' => $name])->refresh());
+            ->map(fn ($name) => User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member, 2, 3, 0))->create(['name' => $name])->refresh());
         $casts[5]->delete();
         $request = ['store_id' => \Tests\Support\StoreFixtures::storeId(), 'requested_by' => $admin->id, 'period_start' => '2026-10-12', 'period_end' => '2026-10-13', 'submission_deadline' => '2099-10-01 23:59:59'];
         $first = DB::table('t_shift_requests')->insertGetId($request);
@@ -48,11 +44,7 @@ class GetShiftStatusTest extends TestCase
     public function test_no_accepting_requests_returns_empty_list(): void
     {
         $admin = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create()->refresh();
-        $admin->user_type = 1;
-        $admin->role_type = 1;
-        $admin->auth_type = 1;
-        $admin->save();
-        \Tests\Support\StoreFixtures::enroll($admin);
+        \Tests\Support\StoreFixtures::enroll($admin, 1, 1, 1);
         $this->actingAs($admin)->getJson('/api/shifts/status')->assertOk()->assertExactJson(['data' => []]);
     }
 }

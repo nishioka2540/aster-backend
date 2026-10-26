@@ -26,7 +26,7 @@ class SystemAdministratorMigrationTest extends TestCase
 
     public function test_legacy_numeric_system_admin_no_longer_grants_privileges(): void
     {
-        $user = User::factory()->create(['auth_type' => 2, 'user_type' => 1, 'role_type' => 5]);
+        $user = User::create(['name' => 'Legacy', 'auth_type' => 2, 'user_type' => 1, 'role_type' => 5]);
         $this->assertFalse($user->isSystemAdministrator());
         $this->actingAs($user)->getJson('/api/shifts/status')->assertForbidden();
     }

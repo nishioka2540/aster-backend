@@ -40,6 +40,16 @@ class SubmitShiftTest extends TestCase
         $this->assertDatabaseHas('t_shift_details', ['work_date' => '2026-10-12', 'availability' => 0, 'start_time' => null, 'end_time' => null, 'note' => null, 'has_reservation' => false]);
     }
 
+    public function test_cast_can_submit_minute_precision_times(): void
+    {
+        $payload = $this->payload();
+        $payload['days'][0]['start_time'] = '20:07';
+        $payload['days'][0]['end_time'] = '23:25';
+        $cast = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create()->refresh();
+        $this->actingAs($cast)->postJson('/api/shifts', $payload)->assertOk();
+        $this->assertDatabaseHas('t_shift_details', ['work_date' => '2026-10-12', 'start_time' => '20:07', 'end_time' => '23:25']);
+    }
+
     public function test_invalid_submissions_do_not_write_any_rows(): void
     {
         $payload = $this->payload();
@@ -47,7 +57,7 @@ class SubmitShiftTest extends TestCase
         $invalid = $payload;
         array_pop($invalid['days']);
         $this->postJson('/api/shifts', $invalid)->assertUnprocessable();
-        foreach (['19:45', '20:01', '22:15', null] as $time) {
+        foreach (['19:45', '20:60', '22:15', null] as $time) {
             $invalid = $payload;
             $invalid['days'][0]['start_time'] = $time;
             $this->postJson('/api/shifts', $invalid)->assertUnprocessable();
@@ -84,11 +94,7 @@ class SubmitShiftTest extends TestCase
         $payload = $this->payload();
         $this->postJson('/api/shifts', $payload)->assertUnauthorized();
         $admin = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create()->refresh();
-        $admin->user_type = 1;
-        $admin->role_type = 1;
-        $admin->auth_type = 1;
-        $admin->save();
-        \Tests\Support\StoreFixtures::enroll($admin);
+        \Tests\Support\StoreFixtures::enroll($admin, 1, 1, 1);
         $this->actingAs($admin)->postJson('/api/shifts', $payload)->assertOk();
     }
 }

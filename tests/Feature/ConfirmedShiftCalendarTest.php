@@ -22,26 +22,26 @@ class ConfirmedShiftCalendarTest extends TestCase
             [2, 2, 0, false], [2, 3, 0, false], [1, 5, 1, true], [2, 3, 1, true],
             [1, 5, 2, true], [2, 3, 2, true],
         ] as [$type, $role, $admin, $allowed]) {
-            $user = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create(['user_type' => $type, 'role_type' => $role, 'auth_type' => $admin === 2 ? 0 : $admin, 'is_system_admin' => $admin === 2]);
+            $user = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member, $type, $role, $admin === 2 ? 0 : $admin))->create(['is_system_admin' => $admin === 2]);
             $this->actingAs($user)->getJson(self::URL)->assertStatus($allowed ? 200 : 403);
         }
     }
 
     public function test_calendar_only_publishes_finalized_days_and_active_working_casts(): void
     {
-        $leader = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create(['user_type' => 1, 'role_type' => 4]);
+        $leader = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member, 1, 4, 0))->create([]);
         $request = DB::table('t_shift_requests')->insertGetId([
             'store_id' => \Tests\Support\StoreFixtures::storeId(), 'requested_by' => $leader->id, 'period_start' => '2026-10-19', 'period_end' => '2026-10-23',
             'submission_deadline' => '2026-10-16 23:59:59', 'status' => 0,
         ]);
-        $working = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create(['name' => 'Working']);
-        $earlier = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create(['name' => 'Earlier']);
-        $off = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create(['name' => 'Off']);
-        $deleted = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create(['name' => 'Deleted']);
+        $working = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member, 2, 3, 0))->create(['name' => 'Working']);
+        $earlier = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member, 2, 3, 0))->create(['name' => 'Earlier']);
+        $off = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member, 2, 3, 0))->create(['name' => 'Off']);
+        $deleted = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member, 2, 3, 0))->create(['name' => 'Deleted']);
         $deleted->delete();
         foreach ([['2026-10-19', 2], ['2026-10-20', 1], ['2026-10-21', 2], ['2026-10-22', 2], ['2026-10-23', 2]] as [$date, $status]) {
             $day = DB::table('t_shift_schedule_days')->insertGetId([
-                'shift_request_id' => $request, 'work_date' => $date, 'status' => $status,
+                'shift_request_id' => $request, 'work_date' => $date, 'status' => $status, 'required_count' => 8,
                 'deleted_at' => $date === '2026-10-22' ? now() : null,
             ]);
             if ($date === '2026-10-21') continue; // Finalized with no attendance.
@@ -56,17 +56,19 @@ class ConfirmedShiftCalendarTest extends TestCase
             }
         }
         $data = $this->actingAs($leader)->getJson(self::URL)->assertOk()->assertJsonCount(5, 'data')->json('data');
-        $this->assertSame(['date' => '2026-10-19', 'confirmed' => true, 'count' => 2, 'casts' => [
+        $this->assertSame(['date' => '2026-10-19', 'confirmed' => true, 'count' => 2, 'required_count' => 8, 'casts' => [
             ['id' => $earlier->ulid, 'name' => 'Earlier', 'start' => '20:00', 'end' => '24:00'],
             ['id' => $working->ulid, 'name' => 'Working', 'start' => '21:00', 'end' => '24:00'],
         ]], $data[0]);
-        $this->assertSame(['date' => '2026-10-20', 'confirmed' => false, 'count' => 0, 'casts' => []], $data[1]);
-        $this->assertSame(['date' => '2026-10-21', 'confirmed' => true, 'count' => 0, 'casts' => []], $data[2]);
+        $this->assertSame(['date' => '2026-10-20', 'confirmed' => false, 'count' => 0, 'required_count' => 0, 'casts' => []], $data[1]);
+        $this->assertSame(['date' => '2026-10-21', 'confirmed' => true, 'count' => 0, 'required_count' => 8, 'casts' => []], $data[2]);
         $this->assertFalse($data[3]['confirmed']);
         $this->assertSame([], $data[3]['casts']);
+        $this->assertSame(0, $data[3]['required_count']);
+        $this->assertSame(8, $data[4]['required_count']);
         $this->assertSame(0, $data[4]['count']);
         foreach ([1, 2] as $role) {
-            $manager = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create(['user_type' => 1, 'role_type' => $role]);
+            $manager = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member, 1, $role, 0))->create([]);
             $this->actingAs($manager)->getJson(self::URL)->assertOk()
                 ->assertJsonPath('data.0.request_ids', [$request])
                 ->assertJsonPath('data.1.request_ids', [])
@@ -80,7 +82,7 @@ class ConfirmedShiftCalendarTest extends TestCase
     public function test_viewers_cannot_use_management_apis(): void
     {
         foreach ([[1, 4], [2, 1]] as [$type, $role]) {
-            $user = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create(['user_type' => $type, 'role_type' => $role]);
+            $user = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member, $type, $role, 0))->create([]);
             $this->actingAs($user)->getJson('/api/shifts/status')->assertForbidden();
             $this->postJson('/api/shift-requests', [])->assertForbidden();
             $this->putJson('/api/admin/shift-requests/1/schedule/days/2026-10-19', [])->assertForbidden();
@@ -90,7 +92,7 @@ class ConfirmedShiftCalendarTest extends TestCase
 
     public function test_date_range_is_required_valid_ordered_and_bounded(): void
     {
-        $this->actingAs(User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create(['user_type' => 2, 'role_type' => 1]));
+        $this->actingAs(User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member, 2, 1, 0))->create([]));
         foreach (['', '?from=2026-02-30&to=2026-03-01', '?from=2026-10-23&to=2026-10-19',
             '?from=2026-01-01&to=2026-12-31'] as $query) {
             $this->getJson('/api/shifts/confirmed-calendar'.$query)->assertUnprocessable();

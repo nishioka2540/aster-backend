@@ -70,8 +70,8 @@ final readonly class Shift
 
     private static function minutes(string $time): int
     {
-        if (! preg_match('/^(?:[01][0-9]|2[0-3]):(?:00|15|30|45)$/D', $time)) {
-            throw new DomainException('出退勤時刻は15分刻みで入力してください。');
+        if (! preg_match('/^(?:[01][0-9]|2[0-3]):[0-5][0-9]$/D', $time)) {
+            throw new DomainException('出退勤時刻はHH:mm形式で入力してください。');
         }
 
         return (int) substr($time, 0, 2) * 60 + (int) substr($time, 3, 2);

@@ -10,7 +10,7 @@ class ShiftRequestAvailabilityTest extends TestCase
  use RefreshDatabase;
  public function test_defaults_and_registration_use_latest_confirmed_end(): void
  {
-  $admin = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create(['auth_type' => 1, 'user_type' => 1, 'role_type' => 1])->refresh();
+  $admin = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member, 1, 1, 1))->create([])->refresh();
   $this->actingAs($admin);
   $payload = ['store_id' => \Tests\Support\StoreFixtures::storeId(), 'requested_by' => $admin->id, 'period_start' => '2026-10-12', 'period_end' => '2026-10-16', 'submission_deadline' => '2099-10-09 23:59:59'];
   $id = DB::table('t_shift_requests')->insertGetId($payload);
@@ -26,7 +26,7 @@ class ShiftRequestAvailabilityTest extends TestCase
  }
  public function test_defaults_without_confirmed_requests_leave_period_blank_and_use_next_weekday_deadline(): void
  {
-  $admin = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create(['auth_type' => 1, 'user_type' => 1, 'role_type' => 1])->refresh();
+  $admin = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member, 1, 1, 1))->create([])->refresh();
   $this->actingAs($admin);
   $this->travelTo(CarbonImmutable::parse('2026-10-16 23:59:59', 'Asia/Tokyo'));
   $expected = ['period_start' => null, 'submission_deadline' => '2026-10-19', 'confirmed_end' => null, 'has_unconfirmed_request' => false];

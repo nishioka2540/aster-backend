@@ -30,7 +30,7 @@ final readonly class ShiftScheduleQueryService
         $days = $this->repository->days($id);
 
         return ['confirmed' => $schedule->confirmed, 'confirmation_available' => $schedule->confirmationAvailable(CarbonImmutable::today('Asia/Tokyo')->format('Y-m-d')), 'days' => array_map(fn ($date) => [
-            'date' => $date, 'confirmed' => $days[$date]['confirmed'] ?? false, 'count' => $days[$date]['count'] ?? 0, 'finalized' => $days[$date]['finalized'] ?? false,
+            'required_count' => $days[$date]['required_count'] ?? 0, 'date' => $date, 'confirmed' => $days[$date]['confirmed'] ?? false, 'count' => $days[$date]['count'] ?? 0, 'finalized' => $days[$date]['finalized'] ?? false,
         ], $schedule->dates())];
     }
 
@@ -38,7 +38,7 @@ final readonly class ShiftScheduleQueryService
     {
         $schedule = $this->find($id);
         $schedule->validateDate($date);
-        $result = ['confirmed' => $schedule->confirmed || ($this->repository->days($id)[$date]['finalized'] ?? false), 'casts' => $this->repository->assignments($id, $date)];
+        $result = ['required_count' => $this->repository->days($id)[$date]['required_count'] ?? 0, 'confirmed' => $schedule->confirmed || ($this->repository->days($id)[$date]['finalized'] ?? false), 'casts' => $this->repository->assignments($id, $date)];
         $casts = DB::table('mst_users')->whereIn('id', \App\Services\StoreAccess::castIds())->orderBy('name')->get(['id', 'ulid', 'name']);
         $ulids = $casts->pluck('ulid', 'id');
         $result['casts'] = array_map(fn ($cast) => [...$cast, 'id' => $ulids[$cast['id']]], $result['casts']);

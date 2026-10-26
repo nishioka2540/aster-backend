@@ -43,7 +43,7 @@ final readonly class ShiftSchedule
             $start = self::minutes($cast['start']);
             $end = $cast['end'] === '24:00' ? 1440 : self::minutes($cast['end']);
             if ($start < 1200 || $start > 1320 || $end < 1320 || $end > 1440 || $end <= $start) {
-                throw new DomainException('開始20:00〜22:00、終了22:00〜24:00を15分刻みで指定してください。');
+                throw new DomainException('開始20:00〜22:00、終了22:00〜24:00で指定してください。');
             }
         }
     }
@@ -69,7 +69,7 @@ final readonly class ShiftSchedule
 
     private static function minutes(string $time): int
     {
-        if (!preg_match('/^(?:[01][0-9]|2[0-3]):(?:00|15|30|45)$/D', $time)) throw new DomainException('勤務時間は15分刻みで指定してください。');
+        if (!preg_match('/^(?:[01][0-9]|2[0-3]):[0-5][0-9]$/D', $time)) throw new DomainException('勤務時間はHH:mm形式で指定してください。');
         return (int) substr($time, 0, 2) * 60 + (int) substr($time, 3, 2);
     }
 }

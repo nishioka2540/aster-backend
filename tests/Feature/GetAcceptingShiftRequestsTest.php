@@ -36,7 +36,7 @@ class GetAcceptingShiftRequestsTest extends TestCase
     {
         // UTC is still October 22, but the shop date is October 23.
         $this->travelTo(\Carbon\CarbonImmutable::parse('2026-10-22 15:30:00', 'UTC'));
-        $manager = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create(['user_type' => 1, 'role_type' => 2]);
+        $manager = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member, 1, 2, 0))->create([]);
         $payload = ['store_id' => \Tests\Support\StoreFixtures::storeId(), 'requested_by' => $manager->id, 'period_start' => '2026-10-19',
             'submission_deadline' => '2026-10-16 23:59:59'];
         $expired = ShiftRequestModel::create([...$payload, 'period_end' => '2026-10-22']);
@@ -46,7 +46,7 @@ class GetAcceptingShiftRequestsTest extends TestCase
         $deleted = ShiftRequestModel::create([...$payload, 'period_end' => '2026-10-30']);
         $deleted->delete();
         foreach ([1, 2] as $role) {
-            $this->actingAs(User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create(['user_type' => 1, 'role_type' => $role]))
+            $this->actingAs(User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member, 1, $role, 0))->create([]))
                 ->getJson('/api/shift-requests/accepting?include_confirmed=1&upcoming_only=1')
                 ->assertOk()->assertJsonCount(2, 'data')
                 ->assertJsonPath('data.0.id', $future->id)->assertJsonPath('data.1.id', $today->id);

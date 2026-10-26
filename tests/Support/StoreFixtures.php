@@ -17,16 +17,15 @@ final class StoreFixtures
         return DB::table('t_store')->insertGetId(['ulid' => (string) Str::ulid(), 'organization_id' => $org, 'name' => 'テスト店舗']);
     }
 
-    public static function enroll(User $user): void
+    public static function enroll(User $user, int $type = 2, int $roleType = 3, int $manager = 0): void
     {
         $store = self::storeId();
-        $type = (int) $user->user_type;
         $access = DB::table('mst_access_roles')->where('code', $type === 2 ? 'cast' : 'staff')->sole()->id;
         $permissions = $type === 2 ? ['shift.submit'] : ['shift_calendar.view'];
-        if ($type === 2 && $user->role_type === 1) $permissions[] = 'shift_calendar.view';
-        if ($type === 1 && in_array($user->role_type, [1, 2])) $permissions = ['shift.manage', 'shift_calendar.view'];
-        if ($user->auth_type === 1) $permissions = ['shift.manage', 'shift.submit', 'shift_calendar.view'];
-        $code = 'fixture-'.$type.'-'.$user->role_type.'-'.$user->auth_type;
+        if ($type === 2 && $roleType === 1) $permissions[] = 'shift_calendar.view';
+        if ($type === 1 && in_array($roleType, [1, 2])) $permissions = ['shift.manage', 'shift_calendar.view'];
+        if ($manager === 1) $permissions = ['shift.manage', 'shift.submit', 'shift_calendar.view'];
+        $code = 'fixture-'.$type.'-'.$roleType.'-'.$manager;
         DB::table('mst_roles')->insertOrIgnore(['store_id' => $store, 'access_role_id' => $access, 'code' => $code, 'name' => $code]);
         $role = DB::table('mst_roles')->where(['store_id' => $store, 'code' => $code])->sole()->id;
         foreach ($permissions as $permission) {

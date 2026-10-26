@@ -79,7 +79,7 @@ class UserStoreContextTest extends TestCase
     public function test_legacy_flags_do_not_grant_access_without_membership(): void
     {
         $this->store('A');
-        $user = User::factory()->create(['auth_type' => 1, 'user_type' => 1, 'role_type' => 1]);
+        $user = User::create(['name' => 'Legacy', 'auth_type' => 1, 'user_type' => 1, 'role_type' => 1]);
         $this->actingAs($user)->getJson('/api/user')->assertOk()->assertJsonPath('memberships', [])
             ->assertJsonPath('permissions', [])->assertJsonPath('home_path', '/mypage');
         $this->getJson('/api/shifts/status')->assertForbidden();

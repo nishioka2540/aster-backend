@@ -51,7 +51,7 @@ final class ShiftScheduleController extends Controller
         $request->validate(['date' => ['required', 'date_format:Y-m-d']]);
 
         return $this->execute($request, function () use ($request, $requestId, $date, $useCase) {
-            $useCase->decideForCasts($requestId, $date, $request->validated('casts'), (int) $request->user()->id);
+            $useCase->decideForCasts($requestId, $date, $request->validated('casts'), (int) $request->user()->id, $request->has('required_count') ? (int) $request->validated('required_count') : null);
 
             return ['message' => '日別のシフトを保存しました。'];
         });

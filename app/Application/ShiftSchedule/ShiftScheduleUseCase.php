@@ -19,7 +19,7 @@ final readonly class ShiftScheduleUseCase
         return $this->repository->find($id, $lock) ?? throw new DomainException('提出依頼が見つかりません。');
     }
 
-    public function decideForCasts(int $id, string $date, array $casts, int $adminId): void
+    public function decideForCasts(int $id, string $date, array $casts, int $adminId, ?int $requiredCount = null): void
     {
         $casts = array_map(function ($cast) {
             $user = \App\Models\User::whereIn('id', \App\Services\StoreAccess::castIds())->where('ulid', $cast['id'])->first();
@@ -29,7 +29,7 @@ final readonly class ShiftScheduleUseCase
 
             return [...$cast, 'id' => $user->id];
         }, $casts);
-        $this->decide($id, $date, $casts, $adminId);
+        $this->decide($id, $date, $casts, $adminId, $requiredCount);
     }
 
     public function confirmWithNotification(int $id, int $adminId, ?string $from, ?string $to, bool $notifyLine): string
@@ -51,14 +51,15 @@ final readonly class ShiftScheduleUseCase
         });
     }
 
-    public function decide(int $id, string $date, array $casts, int $adminId): void
+    public function decide(int $id, string $date, array $casts, int $adminId, ?int $requiredCount = null): void
     {
-        $this->repository->transaction(function () use ($id, $date, $casts, $adminId) {
+        $this->repository->transaction(function () use ($id, $date, $casts, $adminId, $requiredCount) {
             $schedule = $this->find($id, true);
+            if ($requiredCount !== null && ($requiredCount < 0 || $requiredCount > 65535)) throw new DomainException('必要人数は0〜65535の整数で指定してください。');
             $finalized = $this->repository->days($id)[$date]['finalized'] ?? false;
             $schedule->decide($date, $casts, $this->repository->castIds($id, $date),
                 $finalized ? $this->repository->allCastIds() : []);
-            $this->repository->saveDay($id, $date, $casts, $adminId);
+            $this->repository->saveDay($id, $date, $casts, $adminId, $requiredCount);
         });
     }
 

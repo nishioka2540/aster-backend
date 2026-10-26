@@ -13,7 +13,7 @@ class AdminCastShiftTest extends TestCase
 
     public function test_admin_can_submit_for_a_cast_without_a_draft(): void
     {
-        $admin = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create(['auth_type' => 1, 'user_type' => 1, 'role_type' => 1])->refresh();
+        $admin = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member, 1, 1, 1))->create([])->refresh();
         $cast = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create()->refresh();
         $id = DB::table('t_shift_requests')->insertGetId([
             'store_id' => \Tests\Support\StoreFixtures::storeId(), 'requested_by' => $admin->id, 'period_start' => '2026-11-02', 'period_end' => '2026-11-02',
@@ -33,11 +33,7 @@ class AdminCastShiftTest extends TestCase
     public function test_admin_can_read_register_and_edit_a_cast_submission(): void
     {
         $admin = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create()->refresh();
-        $admin->user_type = 1;
-        $admin->role_type = 1;
-        $admin->auth_type = 1;
-        $admin->save();
-        \Tests\Support\StoreFixtures::enroll($admin);
+        \Tests\Support\StoreFixtures::enroll($admin, 1, 1, 1);
         $cast = User::factory()->afterCreating(fn ($member) => \Tests\Support\StoreFixtures::enroll($member))->create()->refresh();
         $id = DB::table('t_shift_requests')->insertGetId([
             'store_id' => \Tests\Support\StoreFixtures::storeId(), 'requested_by' => $admin->id, 'period_start' => '2026-10-12', 'period_end' => '2026-10-12',
